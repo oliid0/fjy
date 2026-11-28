@@ -271,7 +271,7 @@ for (const width of [1440, 3080, 390]) {
       .poll(() =>
         page.evaluate(() => Reflect.get(window, "fcTestSpeechOutput")),
       )
-      .toContain("牛顿定律描述力和运动的关系。");
+      .toContain("合外力为零时，物体保持静止或匀速直线运动。");
     await say(page, "推力撤去后为什么还能运动？");
     await expect(page.locator(".fc-voice-caption")).toContainText(
       "我们可以继续讨论",

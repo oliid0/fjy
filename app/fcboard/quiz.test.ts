@@ -133,7 +133,7 @@ it.each(["出零道题", "出0道题", "出五十一道题", "出一百道题"])
   },
 );
 
-it("limits real independent question work to ten and publishes completion order before a stalled first task", async () => {
+it("starts all twelve independent questions simultaneously and publishes completion order before a stalled first task", async () => {
   const pending = new Map<number, (value: string) => void>();
   const request = new AbortController();
   let running = 0;
@@ -163,14 +163,14 @@ it("limits real independent question work to ten and publishes completion order 
     progress,
   );
   try {
-    await waitFor(() => expect(pending.size).toBe(10));
+    await waitFor(() => expect(pending.size).toBe(12));
     pending.get(1)!(JSON.stringify(candidate(1)));
     await waitFor(() =>
       expect(progress.mock.calls.at(-1)?.[0].questions[0].question).toBe(
         "独立题目 2",
       ),
     );
-    expect(running).toBeLessThanOrEqual(10);
+    expect(running).toBeLessThanOrEqual(12);
     await waitFor(() => expect(pending.has(10)).toBe(true));
     for (const [index, finish] of pending) {
       finish(JSON.stringify(candidate(index)));
@@ -180,192 +180,11 @@ it("limits real independent question work to ten and publishes completion order 
     const result = await job;
     expect(result.questions).toHaveLength(12);
     expect(result.questions[0].question).toBe("独立题目 2");
-    expect(maximum).toBe(10);
+    expect(maximum).toBe(12);
   } finally {
     request.abort();
     await job.catch(() => {});
   }
-});
-
-it("publishes all text while an independent image is slow and publishes its result without AI review", async () => {
-  let finish!: (
-    image: Awaited<ReturnType<typeof images.generateImage>>,
-  ) => void;
-  const image = vi.spyOn(images, "generateImage").mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
-  const chat = vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
-    const index = taskIndex(messages);
-    return JSON.stringify({
-      ...candidate(index),
-      ...(index === 0
-        ? {
-            question: "如图，两个苹果各重多少？",
-            needsImage: true,
-            imageMethod: "generate",
-            imagePrompt:
-              "Exactly two apples, total weight 200g; label total only",
-            imageCaption: "两个苹果共重200g",
-          }
-        : {}),
-    });
-  });
-  const progress = vi.fn();
-  const job = generateQuiz(
-    "出2道题",
-    new AbortController().signal,
-    "",
-    undefined,
-    undefined,
-    progress,
-  );
-  await waitFor(() => expect(image).toHaveBeenCalledTimes(1));
-  expect(progress.mock.calls.at(-1)![0].questions).toHaveLength(2);
-  expect(progress.mock.calls.at(-1)![0].questions[0].image.status).toBe(
-    "pending",
-  );
-  finish({
-    dataURL: "data:image/png;base64,aGVsbG8=" as DataURL,
-    mimeType: "image/png",
-    width: 100,
-    height: 100,
-  });
-  const result = await job;
-  expect(result.questions[0].image).toMatchObject({
-    status: "ready",
-    dataURL: "data:image/png;base64,aGVsbG8=" as DataURL,
-  });
-  expect(chat).toHaveBeenCalledTimes(2);
-  expect(image.mock.calls[0][0]).toContain("Exactly two apples");
-});
-
-it("isolates an invalid question and a failed illustration without dropping the other completed text", async () => {
-  const attempts = new Map<number, number>();
-  vi.spyOn(images, "generateImage").mockRejectedValue(
-    new Error("image quota exceeded"),
-  );
-  vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
-    const index = taskIndex(messages);
-    attempts.set(index, (attempts.get(index) || 0) + 1);
-    if (index === 0) {
-      return JSON.stringify({
-        ...candidate(index),
-        question: "如图，求苹果数量。",
-        needsImage: false,
-      });
-    }
-    return JSON.stringify({
-      ...candidate(index),
-      ...(index === 1
-        ? {
-            needsImage: true,
-            imageMethod: "generate",
-            imagePrompt: "one apple",
-            imageCaption: "一个苹果",
-          }
-        : {}),
-    });
-  });
-  const result = await generateQuiz("出3道题", new AbortController().signal);
-  expect(result.questions).toHaveLength(2);
-  expect(result.errors).toHaveLength(1);
-  expect(result.errors![0]).toContain(t("fcboard.quizForm.imageSpecification"));
-  expect(attempts.get(0)).toBe(1);
-  expect(result.questions.find((q) => q.image)?.image).toMatchObject({
-    status: "error",
-    error: "image quota exceeded",
-  });
-  expect(result.generating).toBe(false);
-});
-
-it("publishes complete questions and answers before a Vega figure and retains them when its single render fails", async () => {
-  let rejectDrawing!: (error: Error) => void;
-  const renderer = vi
-    .spyOn(graphics, "renderQuizGraphic")
-    .mockImplementationOnce(
-      () =>
-        new Promise((_, reject) => {
-          rejectDrawing = reject;
-        }),
-    )
-    .mockRejectedValue(new Error("diagram render failed"));
-  const imageProvider = vi.spyOn(images, "generateImage");
-  vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
-    if (String(messages[0].content).startsWith("Create only the accurate")) {
-      return JSON.stringify({
-        title: "Fruit counts",
-        mode: "vega-lite",
-        spec: {
-          data: {
-            values: [
-              { fruit: "Apples", count: 2 },
-              { fruit: "Pears", count: 3 },
-            ],
-          },
-          mark: "bar",
-          width: 240,
-          height: 180,
-          encoding: {
-            x: { field: "fruit", type: "nominal" },
-            y: { field: "count", type: "quantitative" },
-          },
-        },
-      });
-    }
-    const index = taskIndex(messages);
-    return JSON.stringify({
-      ...candidate(index),
-      ...(index === 0
-        ? {
-            question: "如图，苹果和梨共多少个？",
-            options: ["2", "3", "5", "6"],
-            answer: ["C"],
-            explanation: "2+3=5。",
-            needsImage: true,
-            imageMethod: "draw",
-            imagePrompt: "Apples=2, Pears=3; labeled counts, do not show total",
-            imageCaption: "水果数量",
-          }
-        : {}),
-    });
-  });
-  const progress = vi.fn();
-  const job = generateQuiz(
-    "使用 Vega 出2道题",
-    new AbortController().signal,
-    "",
-    undefined,
-    undefined,
-    progress,
-  );
-  await waitFor(() => expect(typeof rejectDrawing).toBe("function"));
-  const partial = progress.mock.calls.at(-1)![0] as Quiz;
-  expect(partial.questions).toHaveLength(2);
-  expect(partial.questions[0].answer).toEqual(["C"]);
-  expect(partial.questions[0].image).toMatchObject({
-    method: "draw",
-    status: "pending",
-    engines: { required: ["vega"] },
-  });
-  rejectDrawing(new Error("diagram render failed"));
-  const result = await job;
-  expect(result.questions.map((question) => question.id)).toEqual(
-    partial.questions.map((question) => question.id),
-  );
-  expect(result.questions[0].question).toBe(partial.questions[0].question);
-  expect(result.questions[0].answer).toEqual(["C"]);
-  expect(result.questions[0].explanation).toBe("2+3=5。");
-  expect(result.questions[0].image).toMatchObject({
-    status: "error",
-    error: "diagram render failed",
-  });
-  expect(result.errors).toEqual([]);
-  expect(result.generating).toBe(false);
-  expect(renderer).toHaveBeenCalledTimes(1);
-  expect(imageProvider).not.toHaveBeenCalled();
 });
 
 it("rejects truncated counts, duplicate questions, invalid choice keys while allowing an original quiz without invented sources", () => {
@@ -465,8 +284,18 @@ it("replaces pending slots progressively without resetting answers, position or 
     id: "second",
     question: "如图选择",
     image: {
-      method: "generate" as const,
-      prompt: "two apples",
+      method: "draw" as const,
+      spec: {
+        mode: "vega-lite" as const,
+        spec: {
+          data: { values: [{ x: 1, y: 2 }] },
+          mark: "point",
+          encoding: {
+            x: { field: "x", type: "quantitative" },
+            y: { field: "y", type: "quantitative" },
+          },
+        },
+      },
       caption: "两个苹果",
       status: "pending" as const,
     },
@@ -543,8 +372,12 @@ it("keeps generated questions and answers usable when a picture fails and retrie
         ...quiz().questions[0],
         id: "retry",
         image: {
-          method: "generate" as const,
-          prompt: "one apple",
+          method: "draw" as const,
+          spec: {
+            mode: "jsxgraph",
+            boundingbox: [-1, 5, 5, -1],
+            elements: [{ id: "A", type: "point", parents: [0, 0] }],
+          },
           caption: "apple",
           status: "error",
           error: "quota exceeded",

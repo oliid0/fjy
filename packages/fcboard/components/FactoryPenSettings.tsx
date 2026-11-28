@@ -10,73 +10,26 @@ import { t, useI18n } from "../i18n";
 
 import { switchWhiteboardPen, switchWhiteboardTip } from "../whiteboardPen";
 
+import { OverflowLabel } from "./OverflowLabel";
 import { FactoryIcon } from "./FactoryIcon";
 import { FactoryColorWheel } from "./FactoryColorWheel";
 
 import type { FcboardImperativeAPI, UIAppState } from "../types";
 
-const penPages = [
-  [
-    [
-      "hard",
-      "normal_brush",
-      "#334155",
-      "M5 19l2-5L17 4l3 3L10 17l-5 2Zm8-11 3 3",
-    ],
-    [
-      "brush",
-      "fountain",
-      "#6335a7",
-      "M12 3 5 14l4 5h6l4-5-7-11Zm0 4v6m-3 6v2h6v-2",
-    ],
-    [
-      "highlighter",
-      "highlighter",
-      "#a55c00",
-      "m5 15 9-11 6 5-9 11-6-5Zm4-4 6 5M6 16l-2 4h6",
-    ],
-    ["dashed", "dashed_pen", "#316475", "M3 17h4m3-3 4-3m3-3 4-3"],
-    [
-      "rainbow",
-      "rainbow_pen",
-      "#9f397a",
-      "M3 17a9 9 0 0 1 18 0M6 17a6 6 0 0 1 12 0m-9 0a3 3 0 0 1 6 0",
-    ],
-    [
-      "laser",
-      "laser_pen",
-      "#b62e35",
-      "m4 20 9-9 2 2-9 9-2-2Zm12-14 2-3m-1 6 4-1m-5 4 2 3",
-    ],
-  ],
-  [
-    [
-      "magic",
-      "magic_pen",
-      "#7739a8",
-      "m4 20 10-10 2 2L6 22l-2-2Zm13-17 1.1 3.9L22 8l-3.9 1.1L17 13l-1.1-3.9L12 8l3.9-1.1L17 3ZM5 5v4M3 7h4",
-    ],
-    [
-      "shape",
-      "shape_pen",
-      "#13705e",
-      "m3 13 5-9 5 9H3Zm12 1h6v6h-6Zm-8 1a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",
-    ],
-    ["text", "text_pen", "#355d96", "M5 8V5h14v3m-7-3v14m-4 0h8"],
-    ["function", "function_pen", "#006caa", "M5 3v16h16M7 16c6 0 3-12 14-12"],
-    [
-      "calculation",
-      "calculation_pen",
-      "#976200",
-      "M6 3h12v18H6zm3 4h6m-6 5h1m4 0h1m-6 5h1m4 0h1",
-    ],
-    [
-      "language",
-      "language_pen",
-      "#ac4064",
-      "M3 4h18v13H11l-5 4v-4H3Zm4 10 3-7 3 7m-5-2h4m4-4h2m-1 0v6",
-    ],
-  ],
+// menu_pen_select.xml icons and spacing, extended to the requested 12 pens.
+const pens = [
+  ["hard", "normal_brush", "penCommonBody", "penNormalNib"],
+  ["brush", "fountain", "penCommonBody", "penInkNib"],
+  ["highlighter", "highlighter", "penCommonBody", "penMarkerNib"],
+  ["text", "text_pen", "penTextBody", "penNormalNib"],
+  ["shape", "shape_pen", "penShapeBody", "penNormalNib"],
+  ["laser", "laser_pen", "penLaserBody", "penLaserNib"],
+  ["magic", "magic_pen", "penMagicBody", "penMagicNib"],
+  ["dashed", "dashed_pen", "penCommonBody", "penNormalNib"],
+  ["rainbow", "rainbow_pen", "penCommonBody", "penNormalNib"],
+  ["function", "function_pen", "penShapeBody", "penNormalNib"],
+  ["calculation", "calculation_pen", "penTextBody", "penNormalNib"],
+  ["language", "language_pen", "penTextBody", "penNormalNib"],
 ] as const;
 const colors = [
   "#f3f3f3",
@@ -224,11 +177,6 @@ export const FactoryPenSettings = ({
     state.activeTool.type === "laser"
       ? "laser"
       : state.currentItemInkAssist || state.currentItemPenMode || "hard";
-  const [page, setPage] = useState(() =>
-    penPages[1].some(([mode]) => mode === active) ? 1 : 0,
-  );
-  const swipe = useRef<{ id: number; x: number; y: number }>(undefined);
-  const swiped = useRef(false);
   const [wheel, setWheel] = useState(false);
   const colorButton = useRef<HTMLButtonElement>(null);
   return (
@@ -259,61 +207,23 @@ export const FactoryPenSettings = ({
       <div
         role="group"
         aria-label={t("fcboard.pen_type")}
-        className="fc-pen-page"
-        onPointerDown={(event) => {
-          if (
-            (event.pointerType !== "mouse" || event.button === 0) &&
-            !swipe.current
-          ) {
-            swiped.current = false;
-            swipe.current = {
-              id: event.pointerId,
-              x: event.clientX,
-              y: event.clientY,
-            };
-          }
-        }}
-        onPointerMove={(event) => {
-          const start = swipe.current;
-          if (!start || start.id !== event.pointerId || swiped.current) {
-            return;
-          }
-          const x = event.clientX - start.x;
-          const y = event.clientY - start.y;
-          if (Math.abs(x) < 28 || Math.abs(x) <= Math.abs(y)) {
-            return;
-          }
-          swiped.current = true;
-          event.currentTarget.setPointerCapture?.(event.pointerId);
-          setPage(x < 0 ? 1 : 0);
-        }}
-        onPointerUp={(event) => {
-          if (swipe.current?.id === event.pointerId) {
-            swipe.current = undefined;
-          }
-        }}
-        onPointerLeave={() => {
-          if (!swiped.current) {
-            swipe.current = undefined;
-          }
-        }}
-        onPointerCancel={() => {
-          swipe.current = undefined;
-        }}
-        onClickCapture={(event) => {
-          if (swiped.current && event.detail !== 0) {
-            event.stopPropagation();
-          }
-        }}
+        className="fc-pen-types"
       >
-        {penPages[page].map(([mode, label, color, path]) => (
+        {pens.map(([mode, label, body, nib]) => (
           <button
             key={mode}
             type="button"
             aria-label={t(`fcboard.${label}`)}
             aria-pressed={active === mode}
             title={
-              page === 1
+              [
+                "text",
+                "shape",
+                "magic",
+                "function",
+                "calculation",
+                "language",
+              ].includes(mode)
                 ? t(
                     "fcboard.name_recognized_after_writing_pauses_original_ink_is_kept_until_recognition_finishes",
                     {
@@ -354,31 +264,15 @@ export const FactoryPenSettings = ({
               close();
             }}
           >
-            <span className="fc-pen-icon" style={{ color }} aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d={path} />
-              </svg>
+            <span
+              className="fc-native-pen-graphic"
+              style={{ color: state.currentItemStrokeColor }}
+            >
+              <FactoryIcon name={nib} gradient={state.currentItemInkGradient} />
+              <FactoryIcon name={body} />
             </span>
-            <span>{t(`fcboard.${label}`)}</span>
+            <OverflowLabel>{t(`fcboard.${label}`)}</OverflowLabel>
           </button>
-        ))}
-      </div>
-      <div className="fc-pen-page-dots">
-        {penPages.map(([first], index) => (
-          <button
-            key={first[0]}
-            type="button"
-            aria-label={t("fcboard.page_page", { page: index + 1 })}
-            aria-pressed={page === index}
-            onClick={() => setPage(index)}
-          />
         ))}
       </div>
       <label className="fc-pen-mode">

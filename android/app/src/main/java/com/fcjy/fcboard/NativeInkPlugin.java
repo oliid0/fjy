@@ -34,7 +34,7 @@ public class NativeInkPlugin extends Plugin {
     private final android.hardware.input.InputManager.InputDeviceListener devices=new android.hardware.input.InputManager.InputDeviceListener(){
         @Override public void onInputDeviceAdded(int id){}
         @Override public void onInputDeviceChanged(int id){}
-        @Override public void onInputDeviceRemoved(int id){inputRouter.cancelDevice(id);panelLocks.delete(id);}
+        @Override public void onInputDeviceRemoved(int id){inputRouter.cancelDevice(id);panelLocks.delete(id);notifyPanelLock();}
     };
     @Override public void load() {
         ((MainActivity)getActivity()).setInkInput(this);
@@ -62,44 +62,67 @@ public class NativeInkPlugin extends Plugin {
         return inputRouter.dispatch(event,forward);
     }
 
+    private boolean panelLocked() {
+        for (int i = 0; i < panelLocks.size(); i++) if (panelLocks.valueAt(i)) return true;
+        return false;
+    }
+    private void notifyPanelLock() {
+        notifyListeners("panelLock", new JSObject().put("locked", panelLocked()));
+    }
+    private List<Integer> panelPointers(InputDevice keyboard) {
+        List<Integer> result = new ArrayList<>();
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice pointer = InputDevice.getDevice(id);
+            if (pointer != null && (pointer.supportsSource(InputDevice.SOURCE_TOUCHSCREEN)
+                    || pointer.supportsSource(InputDevice.SOURCE_STYLUS)
+                    || pointer.supportsSource(InputDevice.SOURCE_MOUSE))
+                && (id == keyboard.getId() || NativeBoardKeys.pointerPeer(
+                    keyboard.getName(), keyboard.getVendorId(), keyboard.getProductId(),
+                    pointer.getName(), pointer.getVendorId(), pointer.getProductId()))) result.add(id);
+        }
+        return result;
+    }
     boolean dispatchKey(KeyEvent event) {
         InputDevice device = event.getDevice();
         if (device == null) return false;
         int key = event.getKeyCode();
         boolean bsd = NativeBoardKeys.bsd(device.getName(), device.getVendorId(), device.getProductId())
             || (device.supportsSource(InputDevice.SOURCE_TOUCHSCREEN) && NativeBoardKeys.mergedPanelKey(key, event.getScanCode()));
-        boolean hid = NativeBoardKeys.touchPlanet(device.getName(), device.getVendorId(), device.getProductId());
-        boolean infrared = NativeBoardKeys.infrared(device.getName(), device.getVendorId(), device.getProductId());
-        if (!bsd && !hid && !infrared) return false;
+        boolean hid = NativeBoardKeys.hidPanel(device.getName(), device.getVendorId(), device.getProductId());
+        if (!bsd && !hid) return false;
         String action = bsd ? NativeBoardKeys.vendorAction(key) : null;
-        if (hid || infrared) {
+        if (hid) {
             if (key == KeyEvent.KEYCODE_PAGE_UP) action = "previous";
             else if (key == KeyEvent.KEYCODE_PAGE_DOWN) action = "next";
-            else if (event.isCtrlPressed() && event.isAltPressed() && event.isMetaPressed()) {
-                if (key == (infrared ? KeyEvent.KEYCODE_3 : KeyEvent.KEYCODE_B)) action = "red";
-                else if (key == (infrared ? KeyEvent.KEYCODE_4 : KeyEvent.KEYCODE_C)) action = "new";
-                else if (infrared && key == KeyEvent.KEYCODE_8) action = "save";
-                else if (infrared && key == KeyEvent.KEYCODE_9) action = "share";
-                else if (infrared && key == KeyEvent.KEYCODE_D) action = "ops";
-                // The 7 chord emits an explicit lock or unlock on BSD_UartTouch.
-                else if (infrared && key == KeyEvent.KEYCODE_7) return true;
-            }
+            else if (event.isCtrlPressed() && event.isAltPressed() && event.isMetaPressed())
+                action = NativeBoardKeys.chordAction(key);
         }
         if (action == null) return false;
+        List<Integer> pointers = panelPointers(device);
+        boolean locked = false;
+        for (int id : pointers) locked |= panelLocks.get(id);
+        boolean lockAction = action.equals("lock") || action.equals("unlock") || action.equals("toggleLock");
         String owner = null;
-        boolean unlocking = action.equals("unlock") && panelLocks.get(event.getDeviceId());
         for (Map.Entry<String, Boolean> surface : shortcutSurfaces.entrySet()) {
             if (surface.getValue()) { owner = surface.getKey(); break; }
         }
-        if (owner == null && !unlocking) return false;
+        if (owner == null && !(lockAction && locked)) return false;
         if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() != 0) return true;
         if (!keys.accept(action, bsd, event.getEventTime())) return true;
-        if (action.equals("lock")) {
-            panelLocks.put(event.getDeviceId(), true);
-            inputRouter.cancelDevice(event.getDeviceId());
-            ((MainActivity)getActivity()).cancelPanelWindowTouch(event.getDeviceId());
-        } else if (unlocking) panelLocks.put(event.getDeviceId(), false);
-        if (owner != null) notifyListeners("shortcut", new JSObject().put("owner", owner).put("action", action));
+        if (lockAction) {
+            boolean next = action.equals("lock") || action.equals("toggleLock") && !locked;
+            for (int id : pointers) {
+                panelLocks.put(id, next);
+                if (next) {
+                    inputRouter.cancelDevice(id);
+                    ((MainActivity)getActivity()).cancelPanelWindowTouch(id);
+                }
+            }
+            notifyPanelLock();
+            return true;
+        }
+        android.util.Log.d("NativeInk", "Panel action=" + action + " device=" + event.getDeviceId());
+        notifyListeners("shortcut", new JSObject().put("owner", owner).put("action", action));
         return true;
     }
     private void layer() {
@@ -155,6 +178,7 @@ public class NativeInkPlugin extends Plugin {
                 view.setRecognitionEnabled(call.getBoolean("recognitionEnabled", false));
                 view.setRetainedScene(() -> overlayPreview ? null : ((MainActivity)getActivity()).nativeScene(owner), !"object".equals(call.getString("eraserMode", "stroke")));
                 shortcutSurfaces.put(owner, call.getBoolean("shortcutsEnabled", false));
+                notifyPanelLock();
                 view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f), call.getObject("appearance"));
                 int[] web = new int[2], origin = new int[2]; getBridge().getWebView().getLocationInWindow(web); inputLayer.getLocationInWindow(origin);
                 FrameLayout.LayoutParams bounds = new FrameLayout.LayoutParams(Math.max(1, Math.round((float)width * scale)), Math.max(1, Math.round((float)height * scale)));
@@ -194,7 +218,7 @@ public class NativeInkPlugin extends Plugin {
     @PluginMethod public void remove(PluginCall call) {
         getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); ((MainActivity)getActivity()).removeInkSurface(owner,view); inputRouter.remove(view); inputBounds.remove(view); detach(view); } if (surfaces.isEmpty()) keys.reset(); call.resolve(); });
     }
-    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); panelLocks.clear(); keys.reset(); }); }
+    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); panelLocks.clear(); notifyPanelLock(); keys.reset(); }); }
     private static void detach(android.view.View view) {
         if (view.getParent() instanceof ViewGroup) ((ViewGroup)view.getParent()).removeView(view);
     }

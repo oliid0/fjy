@@ -680,7 +680,9 @@ it("writes a cloud voice title as editable handwriting directly without a model 
   const post = vi.spyOn(transport, "postAI");
   const model = vi.spyOn(ai, "chat");
   try {
-    await runVoiceAgent("手写标题 Energy", [], new AbortController().signal);
+    expect(
+      await runVoiceAgent("手写标题 Energy", [], new AbortController().signal),
+    ).toBe(t("fcboard.assistant_completed"));
     expect(api.getSceneElements().length).toBeGreaterThan(0);
     expect(
       api

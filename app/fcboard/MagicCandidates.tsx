@@ -7,18 +7,14 @@ import { magicEmojiCandidates } from "./magicPen";
 
 import "./MagicCandidates.scss";
 
-import type { GeneratedImage } from "./imageGeneration";
 import type { MagicCandidateInput, MagicChoice } from "./magicPen";
 
 type Request = MagicCandidateInput & {
   id: number;
-  image?: GeneratedImage;
   error?: string;
   running: boolean;
-  controller?: AbortController;
   candidateController?: AbortController;
   finish: (choice?: MagicChoice) => void;
-  retry: () => void;
 };
 
 /** p6.s / layout_select_emoji: three columns, explicit selection then Confirm.
@@ -50,7 +46,6 @@ export const MagicCandidates = () => {
             input.bounds.right,
             input.bounds.bottom,
           ].every(Number.isFinite) ||
-          typeof input.generate !== "function" ||
           !Array.isArray(input.candidates) ||
           (input.loadCandidates !== undefined &&
             typeof input.loadCandidates !== "function")
@@ -68,13 +63,12 @@ export const MagicCandidates = () => {
             ...input,
             id,
             candidates: magicEmojiCandidates(input.candidates),
-            running: false,
+            running: !!input.loadCandidates,
             finish: (choice) => {
               if (!pending.delete(id)) {
                 return;
               }
               input.signal.removeEventListener("abort", abort);
-              job.controller?.abort();
               job.candidateController?.abort();
               publish();
               if (choice) {
@@ -85,43 +79,10 @@ export const MagicCandidates = () => {
                 );
               }
             },
-            retry: () => {
-              job.controller?.abort();
-              const controller = new AbortController();
-              job.controller = controller;
-              job.error = undefined;
-              job.image = undefined;
-              job.running = true;
-              publish();
-              void Promise.resolve()
-                .then(() => {
-                  controller.signal.throwIfAborted();
-                  return input.generate(controller.signal);
-                })
-                .then((image) => {
-                  if (!pending.has(id) || controller.signal.aborted) {
-                    return;
-                  }
-                  job.image = image;
-                })
-                .catch((error) => {
-                  if (!pending.has(id) || controller.signal.aborted) {
-                    return;
-                  }
-                  job.error =
-                    error instanceof Error ? error.message : String(error);
-                })
-                .finally(() => {
-                  if (pending.has(id) && job.controller === controller) {
-                    job.running = false;
-                    publish();
-                  }
-                });
-            },
           };
           pending.set(id, job);
           input.signal.addEventListener("abort", abort, { once: true });
-          job.retry();
+          publish();
           if (input.loadCandidates) {
             const candidateController = new AbortController();
             job.candidateController = candidateController;
@@ -136,7 +97,18 @@ export const MagicCandidates = () => {
                   publish();
                 }
               })
-              .catch(() => {});
+              .catch((error) => {
+                if (pending.has(id) && !candidateController.signal.aborted) {
+                  job.error =
+                    error instanceof Error ? error.message : String(error);
+                }
+              })
+              .finally(() => {
+                if (pending.has(id)) {
+                  job.running = false;
+                  publish();
+                }
+              });
           }
         });
       },
@@ -200,33 +172,15 @@ export const MagicCandidates = () => {
         role="group"
         aria-label={t("fcboard.magic_pen")}
       >
-        <button
-          type="button"
-          className="fc-magic-image"
-          aria-label={t("fcboard.image")}
-          aria-pressed={chosen?.kind === "image"}
-          disabled={active.running}
-          title={active.error}
-          onClick={() =>
-            active.image
-              ? setSelection({
-                  id: active.id,
-                  value: { kind: "image", image: active.image },
-                })
-              : active.retry()
-          }
-        >
-          {active.image ? (
-            <img src={active.image.dataURL} alt="" />
-          ) : active.running ? (
-            <span role="status">{t("fcboard.generating_image")}</span>
-          ) : (
-            <span role="alert">
-              <span className="fc-magic-error">{active.error}</span>
-              <span>{t("chat.retry")}</span>
-            </span>
-          )}
-        </button>
+        {active.running && !active.candidates.length && (
+          <span role="status">{t("fcboard.recognizing_handwriting")}</span>
+        )}
+        {!active.running && !active.candidates.length && (
+          <span role={active.error ? "alert" : "status"}>
+            {active.error ||
+              t("fcboard.no_content_recognized_select_the_area_again")}
+          </span>
+        )}
         {active.candidates.map((text) => (
           <button
             key={text}

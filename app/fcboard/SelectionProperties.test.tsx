@@ -41,13 +41,7 @@ beforeEach(async () => {
           setCurrent(value);
         }}
       >
-        {current && (
-          <SelectionActions
-            api={current}
-            onPlot={vi.fn()}
-            onRequest={vi.fn()}
-          />
-        )}
+        {current && <SelectionActions api={current} />}
       </Fcboard>
     );
   };

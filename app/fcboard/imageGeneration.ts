@@ -1,4 +1,3 @@
-import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 
 import type { FileId } from "@fcboard/element/types";
@@ -8,6 +7,8 @@ import type {
   DataURL,
   FcboardImperativeAPI,
 } from "@fcboard/fcboard/types";
+
+import { postAI } from "./aiTransport";
 
 import { aiLanguagePolicy } from "./aiLocale";
 
@@ -57,20 +58,22 @@ export const generateImage = async (
     /\/(chat\/completions|responses)\/?$/,
     "/images/generations",
   );
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${settings.apiKey}`,
-  };
   const body = {
     model: settings.imageModel.trim(),
     prompt: `${prompt}\n\n${aiLanguagePolicy()}`,
     response_format: "b64_json",
-    size: /^doubao-seedream-5-0-(flash|pro)-/.test(settings.imageModel)
+    size: /^doubao-seedream-5-5-/.test(settings.imageModel)
+      ? "1K"
+      : /^doubao-seedream-5-0-(flash|pro)-/.test(settings.imageModel)
       ? "1.5K"
       : "2048x2048",
     output_format: "png",
     ...(placement.referenceImage ? { image: placement.referenceImage } : {}),
-    ...(placement.transparent ? { background: "transparent" } : {}),
+    ...(placement.transparent
+      ? { background: "transparent" }
+      : /^doubao-seedream-5-5-/.test(settings.imageModel)
+      ? { background: "auto" }
+      : {}),
     ...(/^doubao-seedream-5-0-pro-/.test(settings.imageModel)
       ? { optimize_prompt_options: { mode: "fast" } }
       : {}),
@@ -78,28 +81,15 @@ export const generateImage = async (
   };
   const requestImage = async (dataBody: Record<string, unknown>) => {
     signal.throwIfAborted();
-    let status: number;
-    let data;
-    if (Capacitor.isNativePlatform()) {
-      const response = await CapacitorHttp.post({
-        url,
-        headers,
-        data: dataBody,
-        connectTimeout: 15000,
-        readTimeout: 90000,
-      });
-      status = response.status;
-      data = response.data;
-    } else {
-      const response = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(dataBody),
-        signal,
-      });
-      status = response.status;
-      data = await response.json();
-    }
+    const response = await postAI(
+      url,
+      settings.apiKey,
+      dataBody,
+      signal,
+      () => {},
+    );
+    const status = response.status;
+    let data = JSON.parse(response.data);
     signal.throwIfAborted();
     if (typeof data === "string") {
       data = JSON.parse(data);

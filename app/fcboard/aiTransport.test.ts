@@ -54,12 +54,12 @@ describe("incremental AI transport", () => {
     const id = request.mock.calls[0][0].id;
     abort.abort();
     expect(Classroom.cancelAIStream).toHaveBeenCalledWith({ id });
+    await rejected;
     finish({
       status: 200,
       data: '{"status":"completed","output":[]}',
       stream: false,
     });
-    await rejected;
     const completed = {
       status: 200,
       data: '{"id":"next","status":"completed","output":[]}',
@@ -186,7 +186,7 @@ describe("incremental AI transport", () => {
     });
     const bodies = fetcher.mock.calls.map((call) => JSON.parse(call[1].body));
     expect(bodies[0]).toMatchObject({
-      model: "doubao-seed-2-0-mini-260428",
+      model: "doubao-seed-2-1-lite-260915",
       stream: true,
       service_tier: "fast",
     });

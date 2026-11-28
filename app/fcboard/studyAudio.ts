@@ -2,11 +2,7 @@ import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 
 import { ownedRequest } from "./ownedRequest";
-import {
-  currentSettings,
-  SETTINGS_CHANGED,
-  validateEndpoint,
-} from "./settings";
+import { currentSettings, SETTINGS_CHANGED } from "./settings";
 
 export const AUDIO_GENERATION_ENDPOINT =
   "https://openspeech.bytedance.com/api/v3/tts/create";
@@ -62,15 +58,8 @@ export const createStudyAudio = () => {
     async generate(text: string, language: string, signal: AbortSignal) {
       signal.throwIfAborted();
       const settings = currentSettings();
-      const endpoint = validateEndpoint(
-        settings.ttsEndpoint.trim() || AUDIO_GENERATION_ENDPOINT,
-      );
-      if (!isAudioGenerationEndpoint(endpoint)) {
-        throw new Error(
-          t("fcboard.audio_generation_requires_the_tts_create_endpoint"),
-        );
-      }
-      const key = settings.ttsKey.trim();
+      const endpoint = AUDIO_GENERATION_ENDPOINT;
+      const key = settings.speechKey.trim();
       if (!key) {
         throw new Error(
           t("fcboard.enter_your_doubao_speech_api_key_in_voice_settings"),
@@ -108,12 +97,7 @@ export const createStudyAudio = () => {
         () => {
           const current = currentSettings();
           try {
-            return (
-              current.ttsKey.trim() === key &&
-              validateEndpoint(
-                current.ttsEndpoint.trim() || AUDIO_GENERATION_ENDPOINT,
-              ) === endpoint
-            );
+            return current.speechKey.trim() === key;
           } catch {
             return false;
           }

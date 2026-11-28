@@ -4,6 +4,8 @@ import { getDataURL } from "@fcboard/fcboard/data/blob";
 import {
   eraseStroke,
   eraseStrokeInRegion,
+  strokeIntersectsSweep,
+  prepareNativeEraseStroke,
 } from "@fcboard/fcboard/eraser/stroke";
 import { createEraseRegion } from "@fcboard/fcboard/eraser/region";
 import {
@@ -101,8 +103,6 @@ const documentCompositeGroup = (stroke: InkStroke) =>
     ? `insertion:${stroke.insertion.id}`
     : stroke.plot
     ? `plot:${stroke.plot.id}`
-    : stroke.language
-    ? `language:${stroke.language.group}`
     : undefined;
 
 /** A recognition result belongs to these exact, still-visible trajectories. */
@@ -136,13 +136,40 @@ export const eraseDocumentInk = (
 ) => {
   let changed = false;
   const next = strokes.flatMap((stroke) => {
-    if (
-      stroke.locked ||
-      stroke.text ||
-      stroke.image ||
-      stroke.widget ||
-      stroke.resource
-    ) {
+    if (stroke.locked || stroke.image || stroke.widget || stroke.resource) {
+      return [stroke];
+    }
+    if (stroke.text) {
+      const { left, top, right, bottom } = documentStrokeBounds(stroke);
+      const outline = documentInkElement({
+        ...stroke,
+        text: undefined,
+        fcInk: undefined,
+        width: 0,
+        points: [
+          [left, top],
+          [right, top],
+          [right, bottom],
+          [left, bottom],
+          [left, top],
+        ],
+      });
+      const inside = [from, to].some(
+        ([x, y]) => x >= left && x <= right && y >= top && y <= bottom,
+      );
+      if (
+        inside ||
+        strokeIntersectsSweep(
+          prepareNativeEraseStroke(outline),
+          { x: from[0], y: from[1] },
+          { x: to[0], y: to[1] },
+          width,
+          height,
+        )
+      ) {
+        changed = true;
+        return [];
+      }
       return [stroke];
     }
     const element = documentInkElement(stroke);
@@ -268,8 +295,6 @@ export const eraseDocumentObjects = (
       ? `insertion:${stroke.insertion.id}`
       : stroke.plot
       ? `plot:${stroke.plot.id}`
-      : stroke.language
-      ? `language:${stroke.language.group}`
       : undefined;
   const hit = new Set<string>();
   const groups = new Set<string>();

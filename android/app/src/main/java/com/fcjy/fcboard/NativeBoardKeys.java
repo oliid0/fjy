@@ -15,12 +15,31 @@ final class NativeBoardKeys {
         return product == 0 && (vendor == 0x003f && "BSD_TouchScreen".equals(name)
             || vendor == 0 && "BSD_UartTouch".equals(name));
     }
-    static boolean touchPlanet(String name, int vendor, int product) {
-        return name != null && name.startsWith("TouchPlanet ETDV3") && vendor == 0x0483 && product == 0xba50;
+    static boolean hidPanel(String name, int vendor, int product) {
+        return vendor == 0x0483 && (product == 0xba50 || product == 0xba51)
+            && name != null && (name.startsWith("TouchPlanet ETDV3")
+                || name.startsWith("InfraredMultiTouch-61 Touch Device,") && name.endsWith(" Keyboard"));
     }
-    static boolean infrared(String name, int vendor, int product) {
-        return vendor == 0x0483 && product == 0xba51
-            && name != null && name.startsWith("InfraredMultiTouch-61 Touch Device,") && name.endsWith(" Keyboard");
+    /** Captured Ctrl+Alt+Meta HID buttons, mapped only to application actions.
+     * D remains unconsumed so the operating system owns source switching. */
+    static String chordAction(int key) {
+        switch (key) {
+            case android.view.KeyEvent.KEYCODE_0: return "split";
+            case android.view.KeyEvent.KEYCODE_A: return "tip";
+            case android.view.KeyEvent.KEYCODE_B: return "red";
+            case android.view.KeyEvent.KEYCODE_C: return "new";
+            case android.view.KeyEvent.KEYCODE_7: return "toggleLock";
+            case android.view.KeyEvent.KEYCODE_8: return "save";
+            case android.view.KeyEvent.KEYCODE_9: return "share";
+            default: return null;
+        }
+    }
+    static boolean pointerPeer(String keyboard, int vendor, int product,
+            String pointer, int pointerVendor, int pointerProduct) {
+        if (vendor == 0 || vendor != pointerVendor || product != pointerProduct
+                || keyboard == null || pointer == null) return false;
+        return keyboard.replaceFirst(" (Keyboard|Stylus|Mouse)$", "")
+            .equals(pointer.replaceFirst(" (Keyboard|Stylus|Mouse)$", ""));
     }
     // InputReader can merge the UART into another touchscreen (named "qwerty"
     // in the capture). Match the reported scan/key pair from its key layout.

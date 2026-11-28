@@ -110,35 +110,6 @@ it("sends cloud language ink directly as one cropped image request without OCR",
     "data:image/png;base64,word",
   );
 });
-it.each([defaults.imageModel, "custom-illustrator"])(
-  "passes the original magic PNG directly to image model %s without OCR or a planning API",
-  async (imageModel) => {
-    saveSettings({ ...defaults, apiKey: "test", imageModel }, false);
-    const chat = vi.spyOn(ai, "chat");
-    const ocrRead = vi.spyOn(ocr, "recognizeHandwriting");
-    const capture = vi.fn().mockResolvedValue("data:image/png;base64,source");
-    const result = await recognizeInkContent(
-      "magic",
-      capture,
-      [],
-      new AbortController().signal,
-    );
-    expect(result).toMatchObject({
-      kind: "magic",
-      image: "data:image/png;base64,source",
-      transparent: true,
-    });
-    if (result.kind !== "magic") {
-      throw new Error("Expected magic screenshot");
-    }
-    expect(result.prompt).toContain("3D style");
-    expect(result.prompt).toContain("explicit user preferences take priority");
-    expect(result.prompt).toContain("real alpha channel");
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(chat).not.toHaveBeenCalled();
-    expect(ocrRead).not.toHaveBeenCalled();
-  },
-);
 
 it("keeps local language recognition independent of cloud OCR and forwards text immediately", async () => {
   saveSettings(

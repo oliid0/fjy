@@ -173,7 +173,7 @@ export const explainLanguage = async (
             ...(image
               ? {
                   instruction:
-                    "Transcribe the exact handwritten source in this image, combine with any supplied source text in reading order, and explain it in the same response. Preserve its actual language and punctuation. Never translate the source term itself or invent unreadable words.",
+                    "Study ONLY the word or sentence visible in this cropped screenshot. Read it directly and return all learning fields in this one JSON response. Do not expand to an inferred sentence, neighboring words or text outside the crop. Preserve its actual language and punctuation; do not invent unreadable words.",
                 }
               : {}),
           }),

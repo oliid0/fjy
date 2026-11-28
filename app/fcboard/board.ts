@@ -276,6 +276,7 @@ export const insertText = (
   presentation: Settings["answerStyle"] = currentSettings().answerStyle,
   placement: TextPlacement & {
     groupId?: string;
+    textOnly?: boolean;
     sourceUpdates?: readonly { id: string; data: Record<string, unknown> }[];
   } = {},
 ) => {
@@ -325,6 +326,7 @@ export const insertText = (
   const inkSource = styleSource?.find((element) => element.type === "freedraw");
   const source = textSource || inkSource;
   const inkOutput =
+    !placement.textOnly &&
     (presentation === "handwritten" ||
       (presentation === "match" && !!inkSource)) &&
     supportsHandwriting(text);
@@ -399,37 +401,31 @@ export const insertText = (
       bounds &&
       layout.y === Math.max(viewport.top, bounds.top) &&
       layout.x >= bounds.right + gap;
-    const ink =
-      presentation === "handwritten" || (presentation === "match" && inkSource)
-        ? handwritingElements(
-            placement.mode === "center" ? layout.text : text,
-            {
-              x: 0,
-              y: 0,
-              height: layout.fontSize * 1.25,
-              color:
-                source?.strokeColor ||
-                state.currentItemStrokeColor ||
-                "#000000",
-              width:
-                ((inkSource?.strokeWidth ||
-                  (((state.currentItemStrokeWidth ||
-                    DEFAULT_ELEMENT_PROPS.strokeWidth) /
-                    DEFAULT_ELEMENT_PROPS.strokeWidth) *
-                    4) /
-                    (window.devicePixelRatio || 1) /
-                    state.zoom.value) *
-                  layout.fontSize) /
-                size,
-              opacity: source?.opacity ?? state.currentItemOpacity ?? 100,
-              maxWidth: inline
-                ? Number.MAX_SAFE_INTEGER
-                : viewport.right - layout.x,
-              source: styleSource,
-              customData,
-            },
-          )
-        : null;
+    const ink = inkOutput
+      ? handwritingElements(placement.mode === "center" ? layout.text : text, {
+          x: 0,
+          y: 0,
+          height: layout.fontSize * 1.25,
+          color:
+            source?.strokeColor || state.currentItemStrokeColor || "#000000",
+          width:
+            ((inkSource?.strokeWidth ||
+              (((state.currentItemStrokeWidth ||
+                DEFAULT_ELEMENT_PROPS.strokeWidth) /
+                DEFAULT_ELEMENT_PROPS.strokeWidth) *
+                4) /
+                (window.devicePixelRatio || 1) /
+                state.zoom.value) *
+              layout.fontSize) /
+            size,
+          opacity: source?.opacity ?? state.currentItemOpacity ?? 100,
+          maxWidth: inline
+            ? Number.MAX_SAFE_INTEGER
+            : viewport.right - layout.x,
+          source: styleSource,
+          customData,
+        })
+      : null;
     if (ink) {
       const [left, top, right, bottom] = getCommonBounds(ink);
       const centered = placement.mode === "center";

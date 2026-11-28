@@ -2901,12 +2901,6 @@ export const FilePreview = ({
             const scale = (rect?.width || 1000) / 1000;
             await insertMagicInk(
               api,
-              () =>
-                inkSnapshot(source, bottom - top + 32, undefined, top - 16, {
-                  transparent: true,
-                  left: left - 16,
-                  width: right - left + 32,
-                }),
               source.map((stroke) => stroke.points),
               request.signal,
               {
@@ -3011,7 +3005,7 @@ export const FilePreview = ({
               name: "document.text",
               args: {
                 text: result.translation,
-                presentation: "text",
+                presentation: currentSettings().answerStyle,
                 placement: "below",
                 sourceIds,
                 sourceSignature: signature,

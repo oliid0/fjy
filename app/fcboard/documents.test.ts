@@ -284,7 +284,7 @@ describe("document ink and classroom tools", () => {
     expect(cut[1].fcInk?.dashOffset).toBeGreaterThan(0);
     expect(stroke.points).toHaveLength(3);
   });
-  it("cuts the swept part of a courseware annotation without removing the rest or its source text", () => {
+  it("cuts handwritten annotations and erases intersected text while preserving the input", () => {
     const input = [
       {
         id: "ink",
@@ -304,10 +304,11 @@ describe("document ink and classroom tools", () => {
       },
     ];
     const cut = eraseDocumentInk(input, [100, -50], [100, 50], 20, 24);
-    expect(cut).toHaveLength(3);
+    expect(cut).toHaveLength(2);
     expect(cut[0].points.at(-1)![0]).toBeCloseTo(88);
     expect(cut[1].points[0][0]).toBeCloseTo(112);
-    expect(cut[2]).toBe(input[1]);
+    expect(cut.some((stroke) => stroke.id === "text")).toBe(false);
+    expect(input[1].text).toBe("课件批注");
     expect(input[0].points).toHaveLength(2);
     expect(eraseDocumentInk(input, [400, 0], [500, 0], 20, 24)).toBe(input);
   });
@@ -481,4 +482,51 @@ it("preserves both exterior parts of connected courseware ink when only its midd
     [0, 0],
     [100, 0],
   ]);
+});
+
+it("erases generated and handwritten-font text with an ordinary document eraser", () => {
+  const labels = ["文字笔", "AI文本", "手写体"].map((text, index) => ({
+    id: `text-${index}`,
+    text,
+    generated: true,
+    fontFamily: 5 as const,
+    fontSize: 26,
+    color: "#000000",
+    width: 2,
+    points: [[100, 100 + index * 100]] as [number, number][],
+  }));
+  const locked = { ...labels[0], id: "locked", locked: true };
+  let ink: InkStroke[] = [...labels, locked];
+  for (let index = 0; index < labels.length; index++) {
+    ink = eraseDocumentInk(
+      ink,
+      [90, 110 + index * 100],
+      [300, 110 + index * 100],
+      20,
+      24,
+    );
+  }
+  expect(ink).toEqual([locked]);
+  expect(eraseDocumentInk(labels, [500, 500], [600, 600], 20, 24)).toBe(labels);
+});
+
+it("selects only the circled language word instead of all sentence metadata peers", () => {
+  const parts: InkStroke[] = [100, 230, 360].map((x, index) => ({
+    id: `language-${index}`,
+    points: [
+      [x, 100],
+      [x + 40, 140],
+    ],
+    width: 2,
+    color: "#000",
+    language: { group: "sentence", source: index !== 2 },
+  }));
+  expect(
+    selectDocumentLasso(parts, [
+      [80, 80],
+      [165, 80],
+      [165, 160],
+      [80, 160],
+    ]),
+  ).toEqual(["language-0"]);
 });

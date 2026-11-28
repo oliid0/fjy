@@ -884,12 +884,12 @@ describe("APK-style whiteboard ink", () => {
     fireEvent.click(screen.getByTestId("button-undo"));
     expect(live()).toHaveLength(1);
   });
-  it("retains independent quick tip settings through both pen pages", async () => {
+  it("shows twelve pens together and retains independent quick tip settings", async () => {
     await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
     act(() => h.app.setActiveTool({ type: "freedraw" }));
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
     const types = screen.getByRole("group", { name: t("fcboard.pen_type") });
-    expect(within(types).getAllByRole("button")).toHaveLength(6);
+    expect(within(types).getAllByRole("button")).toHaveLength(12);
     expect(
       screen.queryByRole("button", { name: t("fcboard.next_page") }),
     ).toBeNull();
@@ -914,17 +914,11 @@ describe("APK-style whiteboard ink", () => {
     );
     expect(h.state.currentItemStrokeWidth).toBe(thickWidth);
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.page_page", { page: 2 }) }),
-    );
-    fireEvent.click(
       within(types).getByRole("button", { name: t("fcboard.function_pen") }),
     );
     expect(h.state.currentItemInkAssist).toBe("function");
     expect(types).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.page_page", { page: 1 }) }),
-    );
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.fountain") }),
     );
@@ -1286,9 +1280,13 @@ describe("APK-style whiteboard ink", () => {
     expect(live().filter((element) => element.y === 400)).toHaveLength(1);
   });
 
-  it.each(["freedraw", "eraser", "selection", "lasso"] as const)(
-    "palm object mode erases inserted text while %s is active and supports cancel and undo",
-    async (tool) => {
+  it.each(
+    (["freedraw", "eraser", "selection", "lasso"] as const).flatMap((tool) =>
+      (["stroke", "object"] as const).map((mode) => [tool, mode] as const),
+    ),
+  )(
+    "palm erases inserted text while %s is active in %s mode and supports cancel and undo",
+    async (tool, mode) => {
       const { container } = await render(
         <Fcboard UIOptions={{ unifiedToolbar: true }} />,
       );
@@ -1304,7 +1302,7 @@ describe("APK-style whiteboard ink", () => {
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       });
       act(() => {
-        API.setAppState({ eraserMode: "object" });
+        API.setAppState({ eraserMode: mode });
         h.app.setActiveTool({ type: tool });
       });
       const contact = { pointerType: "touch", width: 70, height: 80 };

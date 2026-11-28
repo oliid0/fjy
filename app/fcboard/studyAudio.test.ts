@@ -25,7 +25,7 @@ beforeEach(() => {
       async () => new Response(JSON.stringify({ audio, duration: 1 })),
     );
   saveSettings(
-    { ...defaults, apiKey: "text-model-key", ttsKey: "speech-only-key" },
+    { ...defaults, apiKey: "text-model-key", speechKey: "speech-only-key" },
     false,
   );
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
@@ -119,13 +119,9 @@ it("uses installed native HTTP with independent bounded requests and decodes JSO
 });
 
 it.each([
-  { ttsKey: "", ttsEndpoint: "", language: "en" },
-  {
-    ttsKey: "speech-only-key",
-    ttsEndpoint: "https://other.example/v1/audio/speech",
-    language: "en",
-  },
-  { ttsKey: "speech-only-key", ttsEndpoint: "", language: "ar" },
+  { speechKey: "", language: "en" },
+
+  { speechKey: "speech-only-key", language: "ar" },
 ])(
   "does not send a text-model key, another service's credential, or an unsupported language: %j",
   async (options) => {
@@ -176,7 +172,7 @@ it("bounds four clips and evicts cached audio on idle or credential change", asy
   await vi.advanceTimersByTimeAsync(60001);
   await value.generate("one", "en", signal);
   expect(network).toHaveBeenCalledTimes(7);
-  saveSettings({ ...defaults, ttsKey: "changed-speech-key" }, false);
+  saveSettings({ ...defaults, speechKey: "changed-speech-key" }, false);
   await value.generate("one", "en", signal);
   expect(network).toHaveBeenCalledTimes(8);
   expect(network.mock.calls.at(-1)?.[1]?.headers).toMatchObject({
@@ -202,7 +198,7 @@ it.each(["close", "key", "deadline"])(
     if (change === "close") {
       controller.abort();
     } else if (change === "key") {
-      saveSettings({ ...defaults, ttsKey: "new-speech-key" }, false);
+      saveSettings({ ...defaults, speechKey: "new-speech-key" }, false);
     } else {
       await vi.advanceTimersByTimeAsync(30000);
     }

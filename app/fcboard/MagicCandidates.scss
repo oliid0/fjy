@@ -48,34 +48,6 @@
       font: calc(100 * var(--fc-magic-unit)) / 1 "Noto Color Emoji",
         "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
     }
-    .fc-magic-image {
-      img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-      }
-      > span {
-        display: block;
-        padding: 4px;
-        font: 400 10px / 1.3 system-ui;
-        overflow-wrap: anywhere;
-      }
-      [role="alert"] > span {
-        display: block;
-        margin-top: 4px;
-        color: #0368ff;
-      }
-      .fc-magic-error {
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 3;
-        overflow: hidden;
-        color: #010101;
-      }
-      &:disabled {
-        cursor: progress;
-      }
-    }
   }
   > footer {
     display: flex;

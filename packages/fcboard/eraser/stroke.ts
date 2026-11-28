@@ -2,6 +2,7 @@ import { getSizeFromPoints } from "@fcboard/common";
 import {
   getElementAbsoluteCoords,
   getElementBounds,
+  getElementLineSegments,
   newElementWith,
 } from "@fcboard/element";
 import { pointFrom, polygonIncludesPointNonZero } from "@fcboard/math";
@@ -470,6 +471,62 @@ export const pointerSamples = (event: PointerEvent) => {
   return samples.length ? [...samples, event] : [event];
 };
 
+/** Text annotations share the ordinary eraser; their groups/containers do not.
+ * Real handwritten paths continue through vector clipping below. */
+export const eraseSceneText = (
+  elements: readonly FcboardElement[],
+  path: readonly Point[],
+  width: number,
+  height: number,
+): readonly FcboardElement[] => {
+  if (!path.length) {
+    return elements;
+  }
+  let map: Map<string, FcboardElement> | undefined;
+  const erased = new Set<string>();
+  for (const element of elements) {
+    if (element.type !== "text" || element.locked || element.isDeleted) {
+      continue;
+    }
+    map ||= new Map(elements.map((item) => [item.id, item]));
+    if (element.containerId && map.get(element.containerId)?.locked) {
+      continue;
+    }
+    const outline = getElementLineSegments(element, map).flatMap((segment) =>
+      segment.map(([x, y]) => ({ x, y })),
+    );
+    if (
+      path.some((to, index) =>
+        nibIntersectsSweep(
+          outline,
+          path[Math.max(0, index - 1)],
+          to,
+          width,
+          height,
+        ),
+      )
+    ) {
+      erased.add(element.id);
+    }
+  }
+  if (!erased.size) {
+    return elements;
+  }
+  return elements.map((element) => {
+    if (erased.has(element.id)) {
+      return newElementWith(element, { isDeleted: true });
+    }
+    if (element.boundElements?.some((bound) => erased.has(bound.id))) {
+      return newElementWith(element, {
+        boundElements: element.boundElements.filter(
+          (bound) => !erased.has(bound.id),
+        ),
+      });
+    }
+    return element;
+  });
+};
+
 /** Shared partial-stroke sweep for browser and native input transactions. */
 export const eraseSceneStrokes = (
   elements: readonly FcboardElement[],
@@ -478,9 +535,10 @@ export const eraseSceneStrokes = (
   width: number,
   height: number,
 ): readonly FcboardElement[] => {
-  let changed = false;
+  const text = eraseSceneText(elements, [from, to], width, height);
+  let changed = text !== elements;
   const next: FcboardElement[] = [];
-  for (const element of elements) {
+  for (const element of text) {
     const survivors =
       element.type === "freedraw"
         ? eraseStroke(element, from, to, width, height)

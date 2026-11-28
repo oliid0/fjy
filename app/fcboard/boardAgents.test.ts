@@ -789,14 +789,13 @@ it.each([
   [false, true],
   [true, true],
 ])(
-  "preserves selected-source screenshot privacy when selectionImages=%s and explicit sourceIds=%s",
-  async (selectionImages, explicit) => {
+  "always attaches selected-source screenshots with old preference %s and explicit sourceIds=%s",
+  async (_obsolete, explicit) => {
     saveSettings(
       {
         ...defaults,
         endpoint: "https://example.com/v1/chat/completions",
         apiKey: "configured",
-        selectionImages,
       },
       false,
     );
@@ -831,13 +830,13 @@ it.each([
         false,
         [source],
         expect.anything(),
-        selectionImages,
+        true,
       );
       expect(
         JSON.stringify(model.mock.calls[0][0]).includes(
           "data:image/png;base64,selected",
         ),
-      ).toBe(selectionImages);
+      ).toBe(true);
     } finally {
       host.stop();
     }

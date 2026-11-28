@@ -1,7 +1,19 @@
-import { Capacitor, CapacitorHttp } from "@capacitor/core";
+import { Capacitor } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 
 import { Classroom } from "./native";
+
+/** Abort the caller immediately, even while the native cancellation callback is pending. */
+const abortable = <T>(request: Promise<T>, signal: AbortSignal): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const abort = () =>
+      reject(signal.reason || new DOMException("Cancelled", "AbortError"));
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    void request
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort));
+  });
 
 let nativeAgentCapability: Promise<boolean> | undefined;
 export const postNativeAgentStep = async (
@@ -29,15 +41,18 @@ export const postNativeAgentStep = async (
   };
   signal.addEventListener("abort", cancel, { once: true });
   try {
-    const response = await Classroom.postAgentStep({
-      id,
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify(body),
-    });
+    const response = await abortable(
+      Classroom.postAgentStep({
+        id,
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify(body),
+      }),
+      signal,
+    );
     signal.throwIfAborted();
     return response;
   } finally {
@@ -246,23 +261,6 @@ export const postAI = async (
     Authorization: `Bearer ${key}`,
   };
   if (Capacitor.isNativePlatform()) {
-    if (!Capacitor.isPluginAvailable("FcboardClassroom")) {
-      const result = await CapacitorHttp.post({
-        url,
-        headers,
-        data: body,
-        connectTimeout: 15000,
-        readTimeout: 90000,
-      });
-      return {
-        status: result.status,
-        data:
-          typeof result.data === "string"
-            ? result.data
-            : JSON.stringify(result.data),
-        stream: false,
-      };
-    }
     const id = crypto.randomUUID();
     let failure: unknown;
     const listener = await Classroom.addListener("aiStream", (event) => {
@@ -285,12 +283,15 @@ export const postAI = async (
     signal.addEventListener("abort", cancel, { once: true });
     try {
       signal.throwIfAborted();
-      const result = await Classroom.postAIStream({
-        id,
-        url,
-        headers,
-        body: JSON.stringify(body),
-      });
+      const result = await abortable(
+        Classroom.postAIStream({
+          id,
+          url,
+          headers,
+          body: JSON.stringify(body),
+        }),
+        signal,
+      );
       signal.throwIfAborted();
       if (failure) {
         throw failure;
@@ -303,7 +304,7 @@ export const postAI = async (
       throw error;
     } finally {
       signal.removeEventListener("abort", cancel);
-      await detach();
+      void detach();
     }
   }
   let response;

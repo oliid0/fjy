@@ -29,8 +29,6 @@ export const getWhiteboardCompositeKey = (element: FcboardElement) => {
     ? `insertion:${data.fcInsertion.id}`
     : data?.fcPlot?.id
     ? `plot:${data.fcPlot.id}`
-    : data?.fcLanguage?.group
-    ? `language:${data.fcLanguage.group}`
     : undefined;
 };
 

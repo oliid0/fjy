@@ -1,9 +1,7 @@
 import { t, getLanguage } from "@fcboard/fcboard/i18n";
 import { Capacitor } from "@capacitor/core";
 
-import { currentSettings, validateEndpoint } from "./settings";
 import { OfflineTts, narrationChunks } from "./nativeNarration";
-import { createStudyAudio, isAudioGenerationEndpoint } from "./studyAudio";
 
 let activeOwner: { pause: () => void } | undefined;
 let audible: { owner: object; text: string; until: number } | undefined;
@@ -22,7 +20,6 @@ export const isNarrationEcho = (text: string) => {
 
 /** One audible owner. A paused lecture keeps its audio position during an interjection. */
 export const createNarrator = () => {
-  const generatedAudio = createStudyAudio();
   let request: AbortController | undefined;
   let player: HTMLAudioElement | undefined;
   let url: string | undefined;
@@ -166,19 +163,12 @@ export const createNarrator = () => {
       });
       // Playback can fail before the caller has returned from speak().
       void finished.catch(() => {});
-      const settings = currentSettings();
       const controller = new AbortController();
       request = controller;
-      const audio =
-        options?.audio ||
-        (isAudioGenerationEndpoint(settings.ttsEndpoint)
-          ? (signal: AbortSignal) =>
-              generatedAudio.generate(text, language, signal)
-          : undefined);
+      const audio = options?.audio;
       try {
         if (
           !audio &&
-          !settings.ttsEndpoint &&
           Capacitor.getPlatform() === "android" &&
           /^(zh|en)(-|$)/i.test(language)
         ) {
@@ -240,7 +230,7 @@ export const createNarrator = () => {
           };
           await next(0);
           return;
-        } else if (!audio && !settings.ttsEndpoint) {
+        } else if (!audio) {
           if (
             !window.speechSynthesis ||
             typeof SpeechSynthesisUtterance === "undefined"
@@ -254,34 +244,7 @@ export const createNarrator = () => {
           synthesize();
           return;
         }
-        let blob: Blob;
-        if (audio) {
-          blob = await audio(controller.signal);
-        } else {
-          const response = await fetch(validateEndpoint(settings.ttsEndpoint), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(settings.ttsKey
-                ? { Authorization: `Bearer ${settings.ttsKey}` }
-                : {}),
-            },
-            body: JSON.stringify({
-              input: text,
-              response_format: "wav",
-              language,
-            }),
-            signal: controller.signal,
-          });
-          if (!response.ok) {
-            throw new Error(
-              t("fcboard.voice_playback_request_failed_status", {
-                status: response.status,
-              }),
-            );
-          }
-          blob = await response.blob();
-        }
+        const blob = await audio(controller.signal);
         if (!blob.size || !blob.type.startsWith("audio/")) {
           throw new Error(
             t("fcboard.the_voice_service_returned_invalid_audio"),

@@ -492,8 +492,18 @@ it("immediately stops visible native-style pending work, ignores its late progre
         ...builderQuiz().questions[0],
         id: "image-1",
         image: {
-          method: "generate",
-          prompt: "two apples",
+          method: "draw",
+          spec: {
+            mode: "vega-lite" as const,
+            spec: {
+              data: { values: [{ x: 1, y: 2 }] },
+              mark: "point",
+              encoding: {
+                x: { field: "x", type: "quantitative" },
+                y: { field: "y", type: "quantitative" },
+              },
+            },
+          },
           caption: "两个苹果",
           status: "pending",
         },

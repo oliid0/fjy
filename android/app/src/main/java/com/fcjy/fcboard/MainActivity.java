@@ -13,11 +13,6 @@ public class MainActivity extends BridgeActivity {
     private final java.util.Set<String> presentedScenes = new java.util.HashSet<>();
     private String startupOwner = "";
     private boolean startupWebReady, startupFallback, startupReleased;
-    private final java.util.concurrent.ExecutorService boardHardware =
-        java.util.concurrent.Executors.newSingleThreadExecutor(runnable ->
-            new Thread(runnable, "native-board-mode"));
-    private NativeBoardMode boardMode;
-
     boolean isBoardUsable() { return startupReleased; }
 
     void nativeScenePresented(String owner) {
@@ -97,14 +92,6 @@ public class MainActivity extends BridgeActivity {
     }
     private static volatile boolean foreground;
     static boolean isForeground() { return foreground; }
-    @Override public void onStart() {
-        super.onStart();
-        boardHardware.execute(() -> boardMode.foreground(true));
-    }
-    @Override public void onStop() {
-        super.onStop();
-        boardHardware.execute(() -> boardMode.foreground(false));
-    }
     @Override public void onResume() { super.onResume(); foreground = true; }
     @Override public void onPause() { foreground = false; super.onPause(); }
     @Override
@@ -133,7 +120,6 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MailPlugin.class);
         registerPlugin(SkizzePenPlugin.class);
         super.onCreate(savedInstanceState);
-        boardMode = new NativeBoardMode(getApplicationContext());
         // Retain the actual launch view while the board renders underneath;
         // a keep-on-screen pre-draw predicate would prevent that rendering.
         splash.setOnExitAnimationListener(view -> { startupSplash = view; releaseStartup(); });
@@ -166,8 +152,6 @@ public class MainActivity extends BridgeActivity {
         }
     }
     @Override public void onDestroy() {
-        if (boardMode != null) boardHardware.execute(() -> boardMode.foreground(false));
-        boardHardware.shutdown();
         if (startupSplash != null) { startupSplash.remove(); startupSplash = null; }
         if (windowDown != null) { windowDown.recycle(); windowDown = null; }
         super.onDestroy();

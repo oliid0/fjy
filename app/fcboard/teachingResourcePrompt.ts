@@ -130,11 +130,3 @@ export const teachingResourceInstructions = (
     ? `The user explicitly requested Vega/Vega-Lite. Use its real declarative engine, either the JSON contract or an HTML resource declaring the vega capability.\n${choice}`
     : choice;
 };
-
-export const quizGraphicInstructions =
-  () => `Create only the accurate textbook figure for the supplied question. Freely choose or combine SVG/canvas, Vega/Vega-Lite and JSXGraph according to the actual figure and explicit engine choices; do not assign subjects to engines or replace an explicit request with another medium. Return a complete self-contained HTML document, or the declarative Vega JSON contract below. Do not include the question text, answer, solution or interface controls in the picture.
-${graphicResourceContract}
-All meaningful labels, quantities, units, arrows and object counts must be INSIDE the SVG/canvas graphics so they survive image export; HTML may provide sized containers but not separate figure labels. Use a white background and legible labels. Draw the actual geometric dependencies, axes, data and physical relationships, not arbitrary decorative approximations. Keep every given value and do not reveal an unknown answer. The app snapshots the completed drawing and checks that actual image independently.
-For JSXGraph use renderer:'svg', showCopyright:false, showNavigation:false and text/label display:'internal', with no external MathJax/KaTeX. For Vega HTML use renderer:'svg' and await vegaEmbed before reporting ready. After the complete initial drawing is finished, dispatch document.dispatchEvent(new Event('fc-figure-ready')); this includes awaiting any asynchronous drawing. A plain static SVG needs no script. The app's pure declarative Vega path reports its own completion. No animation or unfinished initial frame.
-DECLARATIVE VEGA OPTION:
-${visualizationInstructions}`;

@@ -16,7 +16,6 @@ import {
 import { calculateAsync } from "./mathComputation";
 import { fitInkShape, isShapeClosed } from "./shapeRecognition";
 import { hasDigitalInk, recognizeNativeInk } from "./digitalInk";
-import { selectionImagePrompt } from "./selectionImagePrompt";
 
 import type { RecognizedShape } from "./shapeRecognition";
 
@@ -48,7 +47,6 @@ export type InkRecognitionResult =
       targetLanguage: string;
     }
   | RecognizedShape
-  | { kind: "magic"; prompt: string; image?: string; transparent?: boolean }
   | (Extract<MathResult, { kind: "function" }> & { text: string; cloud?: true })
   | (Omit<Extract<MathResult, { kind: "calculation" }>, "expression"> & {
       expression?: string;
@@ -123,29 +121,9 @@ export const settleInkRecognition = async (
   });
 };
 
-type InkRecognitionOptions = [
-  capture: () => Promise<string>,
-  strokes: InkInput,
-  signal: AbortSignal,
-  languageHint?: string,
-  chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
-];
-
-export function recognizeInkContent(
-  mode: "magic",
-  ...options: InkRecognitionOptions
-): Promise<Extract<InkRecognitionResult, { kind: "magic" }>>;
-export function recognizeInkContent(
-  mode: Exclude<InkAssistMode, "magic">,
-  ...options: InkRecognitionOptions
-): Promise<Exclude<InkRecognitionResult, { kind: "magic" }>>;
-export function recognizeInkContent(
-  mode: InkAssistMode,
-  ...options: InkRecognitionOptions
-): Promise<InkRecognitionResult>;
 /** Both visible surfaces share the selected recognition provider and placement rules. */
 export async function recognizeInkContent(
-  mode: InkAssistMode,
+  mode: Exclude<InkAssistMode, "magic">,
   capture: () => Promise<string>,
   strokes: InkInput,
   signal: AbortSignal,
@@ -178,7 +156,7 @@ export async function recognizeInkContent(
             content:
               mode === "function"
                 ? "Read every handwritten function from the image. Return only its complete LaTeX equation or inequality, one per line. Preserve the left side, relation, variables, signs, numbers, exponents, numerator, denominator, and grouping exactly as written. If any symbol is unreadable or incomplete, return only ∅. Never return a guessed character or a question-mark placeholder. Do not solve, simplify, plot, explain, or use Markdown."
-                : "Read the actual handwritten calculation, including the two-dimensional layout, digit positions, operators, and grouping, and compute it. A trailing equal sign or a bar underneath a column calculation marks the answer position. A fraction bar between operands is division. Return only the final mathematical result in plain Unicode notation, with no prefix, trailing punctuation, code fences, units, or explanation. Use digits, signed fractions or decimals, √, π, and mathematical operators as needed. For an equation return the solved variable assignments. Return ∅ if a complete problem cannot be read confidently or already has an answer.",
+                : 'Read the calculation directly from the screenshot and compute it, including complex expressions, equations, fractions, trigonometry, logarithms and two-dimensional layouts. Return only compact JSON {"answer":"final mathematical result in plain Unicode notation","hasEquals":true}. hasEquals is true only if the source already has a trailing equal sign for the answer; do not confuse equation relations with an answer mark. Keep answer free of a leading equals sign and of the original expression. For an equation return solved variable assignments. For a column calculation return its result. If unreadable or incomplete use {"answer":"∅","hasEquals":false}. No explanation, OCR transcript, review or local computation is needed.',
           },
           visualMessage(
             mode === "function"
@@ -213,24 +191,14 @@ export async function recognizeInkContent(
     if (mode === "function") {
       return { ...localFunctionResult(output), text: output, cloud: true };
     }
-    if (
-      output.length > 500 ||
-      !/[\dπ∞]/.test(output) ||
-      !/^(?:\d|[xyzabeiπ∞√∛²³₀-₉⁰-⁹()+\-−×÷*/^=.,;:{}[\]|±∓≤≥<>% \n])*$/u.test(
-        output,
-      ) ||
-      /[A-Za-z]{2}|[=.,;:]$/u.test(output) ||
-      (output.includes("=") &&
-        !output
-          .split(/[,;\n]+/)
-          .every((part) => /^\s*[a-z]\s*=[^=]+$/u.test(part)))
-    ) {
+    const calculation = parseJSON(output) as { answer?: unknown; hasEquals?: unknown } | null;
+    if (typeof calculation?.answer !== "string" || !calculation.answer.trim() || calculation.answer.trim() === "∅" || calculation.answer.length > 2000 || typeof calculation.hasEquals !== "boolean") {
       throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
     return {
       kind: "calculation",
-      answer: output,
-      hasEquals: !rows && calculationInk(strokes).complete,
+      answer: calculation.answer.trim().replace(/^[=＝]+\s*/, ""),
+      hasEquals: calculation.hasEquals,
       ...(rows ? { layout: { mode: "column", lines: rows.length } } : {}),
     };
   }
@@ -410,13 +378,6 @@ export async function recognizeInkContent(
       }
     }
   }
-  if (mode === "magic" && !currentSettings().imageModel.trim()) {
-    throw new Error(
-      t(
-        "fcboard.functions_can_be_plotted_directly_set_an_image_model_id_in_settings_to_generate_illustrations",
-      ),
-    );
-  }
   if (
     mode === "shape" &&
     (currentSettings().ocr === "local" || !currentSettings().apiKey.trim())
@@ -427,14 +388,6 @@ export async function recognizeInkContent(
   signal.throwIfAborted();
   if (!image.startsWith("data:image/")) {
     throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
-  }
-  if (mode === "magic") {
-    return {
-      kind: "magic",
-      image,
-      transparent: true,
-      prompt: selectionImagePrompt("magic"),
-    };
   }
   const instruction =
     'Recognize the hand-drawn geometry and return only {"shape":"rectangle|ellipse|line|arrow|triangle|star|diamond|pentagon|hexagon"} for the closest match. Return {"none":true} when uncertain.';

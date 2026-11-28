@@ -1,198 +1,91 @@
-import { waitFor } from "@testing-library/react";
-
-import type { DataURL } from "@fcboard/fcboard/types";
-
-import { generateQuizImage, quizRequest } from "./quizRequests";
+import { generateQuizImage } from "./quizRequests";
 import * as ai from "./ai";
 import * as images from "./imageGeneration";
 import * as graphics from "./quizGraphic";
-import { generatedResources } from "./generatedResources";
+import { quizFigureResource, validateQuizFigure } from "./quizFigure";
 
 import type { QuizQuestion } from "./quiz";
 
-afterEach(() => vi.restoreAllMocks());
-
-it("keeps ten actual in-flight slots on abort, removes queued aborts and prioritizes pending text over pictures", async () => {
-  const controllers = Array.from({ length: 10 }, () => new AbortController());
-  const finish: (() => void)[] = [];
-  const held = controllers.map((controller) =>
-    quizRequest(
-      controller.signal,
-      () =>
-        new Promise<void>((resolve) => {
-          finish.push(resolve);
-        }),
-    ),
-  );
-  const order: string[] = [];
-  const image = quizRequest(
-    new AbortController().signal,
-    async () => {
-      order.push("image");
-    },
-    1,
-  );
-  const text = quizRequest(new AbortController().signal, async () => {
-    order.push("text");
-  });
-  const cancelled = new AbortController();
-  const runCancelled = vi.fn();
-  const queued = quizRequest(cancelled.signal, runCancelled).catch(
-    (failure) => failure,
-  );
-  try {
-    await waitFor(() => expect(finish).toHaveLength(10));
-    controllers[0].abort();
-    cancelled.abort();
-    await queued;
-    expect(runCancelled).not.toHaveBeenCalled();
-    expect(order).toEqual([]);
-    finish[0]();
-    await text;
-    expect(order[0]).toBe("text");
-    await image;
-    expect(order).toEqual(["text", "image"]);
-  } finally {
-    finish.forEach((release) => release());
-    await Promise.all(held);
-  }
-});
-
 const question = (): QuizQuestion => ({
-  id: "apple-question",
   type: "calculation",
-  question: "如图，两个苹果共重200g，平均每个多重？",
-  answer: ["100g"],
-  explanation: "200/2=100",
-  image: {
-    method: "generate" as const,
-    prompt:
-      "Exactly two apples; a label says total 200g, do not disclose each weight",
-    caption: "两个苹果共重200g",
-    status: "pending",
-  },
-});
-
-const triangle = (title = "Triangle") =>
-  JSON.stringify({
-    title,
-    libraries: ["jsxgraph"],
-    html: `<html><head><title>Triangle</title></head><body><div id="board" data-fc-graphics style="width:600px;height:400px"></div><script>
-  var b=JXG.JSXGraph.initBoard('board',{renderer:'svg',boundingbox:[-1,5,5,-1],showNavigation:false,showCopyright:false});
-  var A=b.create('point',[0,0],{name:'A'}),B=b.create('point',[3,0],{name:'B'}),C=b.create('point',[3,4],{name:'C'});
-  b.create('polygon',[A,B,C],{fillOpacity:0});b.create('text',[1,-0.4,'3 cm']);b.create('text',[3.1,2,'4 cm']);
-  document.dispatchEvent(new Event('fc-figure-ready'));</script></body></html>`,
-  });
-const drawing = (): QuizQuestion => ({
-  ...question(),
-  question: "如图，直角三角形AB=3cm，BC=4cm，求AC。",
-  answer: ["5cm"],
-  explanation: "AC²=3²+4²=25。",
+  question: "三角形AB=3，BC=4，AC=?",
+  answer: ["5"],
   image: {
     method: "draw",
-    engines: { required: ["jsxgraph"], excluded: [] },
-    prompt:
-      "A=(0,0), B=(3,0), C=(3,4); AB 3cm, BC 4cm, AC unknown, no answer disclosure",
-    caption: "直角三角形ABC",
     status: "pending",
+    caption: "三角形ABC",
+    spec: {
+      mode: "jsxgraph",
+      boundingbox: [-1, 5, 5, -1],
+      elements: [
+        { id: "A", type: "point", parents: [0, 0] },
+        { id: "B", type: "point", parents: [3, 0] },
+        { id: "C", type: "point", parents: [3, 4] },
+        { id: "triangle", type: "polygon", parents: ["A", "B", "C"] },
+      ],
+    },
   },
 });
-
-it("publishes the first generated image with one image request and no AI review", async () => {
-  const generate = vi.spyOn(images, "generateImage").mockResolvedValue({
-    dataURL: "data:image/png;base64,YWJj" as DataURL,
-    mimeType: "image/png",
-    width: 100,
-    height: 100,
-  });
+afterEach(() => vi.restoreAllMocks());
+it("renders same-response diagram JSON locally without a model or generated image request", async () => {
   const chat = vi.spyOn(ai, "chat");
-  expect(
-    await generateQuizImage(question(), new AbortController().signal),
-  ).toBe("data:image/png;base64,YWJj");
-  expect(generate).toHaveBeenCalledTimes(1);
-  expect(generate.mock.calls[0][0]).toContain("Exactly two apples");
-  expect(chat).not.toHaveBeenCalled();
-});
-
-it("reports an image failure immediately without automatic generation or review retries", async () => {
-  const generate = vi
-    .spyOn(images, "generateImage")
-    .mockRejectedValue(new Error("quota exceeded"));
-  const chat = vi.spyOn(ai, "chat");
-  await expect(
-    generateQuizImage(question(), new AbortController().signal),
-  ).rejects.toThrow("quota exceeded");
-  expect(generate).toHaveBeenCalledTimes(1);
-  expect(chat).not.toHaveBeenCalled();
-});
-
-it("renders the requested engine once without image review or library persistence", async () => {
-  const before = await generatedResources();
-  const provider = vi.spyOn(images, "generateImage");
+  const image = vi.spyOn(images, "generateImage");
   const render = vi
     .spyOn(graphics, "renderQuizGraphic")
-    .mockResolvedValue("data:image/png;base64,Zmlyc3Q=");
-  const chat = vi.spyOn(ai, "chat").mockResolvedValue(triangle());
-  expect(await generateQuizImage(drawing(), new AbortController().signal)).toBe(
-    "data:image/png;base64,Zmlyc3Q=",
+    .mockResolvedValue("data:image/png;base64,YWJj");
+  const value = question();
+  expect(await generateQuizImage(value, new AbortController().signal)).toBe(
+    "data:image/png;base64,YWJj",
   );
-  expect(render).toHaveBeenCalledTimes(1);
-  expect(chat).toHaveBeenCalledTimes(1);
-  expect(render.mock.calls[0][0].libraries).toEqual(["jsxgraph"]);
-  expect(provider).not.toHaveBeenCalled();
-  expect(await generatedResources()).toEqual(before);
+  expect(render.mock.calls[0][0]).toMatchObject({ libraries: ["jsxgraph"] });
+  expect(render.mock.calls[0][0].html).toContain('"parents":["A","B","C"]');
+  expect(chat).not.toHaveBeenCalled();
+  expect(image).not.toHaveBeenCalled();
 });
-
-it("reports a missing requested engine without substituting or automatically regenerating the figure", async () => {
-  const provider = vi.spyOn(images, "generateImage");
-  const render = vi.spyOn(graphics, "renderQuizGraphic");
-  const chat = vi.spyOn(ai, "chat").mockResolvedValue(
-    JSON.stringify({
-      title: "No engine",
-      html: '<svg><text>AB 3cm</text><path d="M0 0h20"/></svg>',
-    }),
-  );
+it("reports local rendering errors immediately and retries only local rendering", async () => {
+  const render = vi
+    .spyOn(graphics, "renderQuizGraphic")
+    .mockRejectedValueOnce(new Error("invalid geometry"))
+    .mockResolvedValueOnce("data:image/png;base64,YWJj");
+  const value = question();
   await expect(
-    generateQuizImage(drawing(), new AbortController().signal),
-  ).rejects.toThrow();
-  expect(chat).toHaveBeenCalledTimes(1);
-  expect(render).not.toHaveBeenCalled();
-  expect(provider).not.toHaveBeenCalled();
+    generateQuizImage(value, new AbortController().signal),
+  ).rejects.toThrow("invalid geometry");
+  await expect(
+    generateQuizImage(value, new AbortController().signal),
+  ).resolves.toContain("data:image/png");
+  expect(render).toHaveBeenCalledTimes(2);
 });
-
-it("finishes another program figure while an independent figure is still drawing", async () => {
-  let release!: (value: string) => void;
-  let slowFinished = false;
-  vi.spyOn(graphics, "renderQuizGraphic").mockImplementation((resource) =>
-    resource.title === "slow"
-      ? new Promise<string>((resolve) => {
-          release = resolve;
-        })
-      : Promise.resolve("data:image/png;base64,ZmFzdA=="),
-  );
-  const chat = vi
-    .spyOn(ai, "chat")
-    .mockImplementation(async (messages) =>
-      triangle(JSON.parse(String(messages[1].content)).caption),
-    );
-  const first = drawing();
-  first.image!.caption = "slow";
-  const second = drawing();
-  second.image!.caption = "fast";
-  const slow = generateQuizImage(first, new AbortController().signal).then(
-    () => {
-      slowFinished = true;
-    },
-  );
-  try {
-    await waitFor(() => expect(typeof release).toBe("function"));
-    expect(await generateQuizImage(second, new AbortController().signal)).toBe(
-      "data:image/png;base64,ZmFzdA==",
-    );
-    expect(slowFinished).toBe(false);
-    expect(chat).toHaveBeenCalledTimes(2);
-  } finally {
-    release("data:image/png;base64,c2xvdw==");
-    await slow;
-  }
+it("rejects an invalid geometry spec before rendering and escapes text as JSON", async () => {
+  const value = question().image!.spec;
+  expect(() => validateQuizFigure({ ...value, mode: "generate" })).toThrow();
+  expect(() =>
+    validateQuizFigure({ ...value, boundingbox: [0, 0, 0, 0] }),
+  ).toThrow();
+  expect(
+    (
+      await quizFigureResource(
+        {
+          ...value,
+          elements: [
+            {
+              id: "label",
+              type: "text",
+              parents: [0, 0, "</script><script>alert(1)</script>"],
+            },
+          ],
+        },
+        "safe",
+      )
+    ).html,
+  ).not.toContain("</script><script>");
+});
+it("cancels before opening any graphic frame", async () => {
+  const render = vi.spyOn(graphics, "renderQuizGraphic");
+  const controller = new AbortController();
+  controller.abort();
+  await expect(
+    generateQuizImage(question(), controller.signal),
+  ).rejects.toMatchObject({ name: "AbortError" });
+  expect(render).not.toHaveBeenCalled();
 });

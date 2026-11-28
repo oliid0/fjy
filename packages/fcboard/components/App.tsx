@@ -448,6 +448,7 @@ import { FactoryCircleTrail } from "../eraser/FactoryCircleTrail";
 import { ObjectEraser } from "../eraser/ObjectEraser";
 import {
   eraseSceneStrokes,
+  eraseSceneText,
   eraseSceneRegion,
   isPalmContact,
   pointerSamples,
@@ -10156,10 +10157,22 @@ class App extends React.Component<AppProps, AppState> {
             );
           }
         }
+        const text = eraseSceneText(
+          latest,
+          path,
+          current.width,
+          current.height,
+        );
+        for (const element of text) {
+          const original = latestMap.get(element.id);
+          if (element !== original) {
+            remember(element, original);
+          }
+        }
         apply(
           patches.size
-            ? latest.flatMap((element) => patches.get(element.id) ?? [element])
-            : latest,
+            ? text.flatMap((element) => patches.get(element.id) ?? [element])
+            : text,
           true,
         );
       });

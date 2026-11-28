@@ -1,8 +1,9 @@
 import * as i18n from "@fcboard/fcboard/i18n";
 import { t } from "@fcboard/fcboard/i18n";
-import { Capacitor, CapacitorHttp } from "@capacitor/core";
+import { Capacitor } from "@capacitor/core";
 
 import { boardContext, chat, parseJSON } from "./ai";
+import { Classroom } from "./native";
 import { sceneAPI } from "./test/scene";
 import {
   currentSettings,
@@ -46,15 +47,32 @@ describe("AI configuration and transport", () => {
     sessionStorage.clear();
     expect(currentSettings().apiKey).toBe("remembered-key");
   });
-  it("defaults selection screenshots off and persists an explicit boolean opt-in", () => {
-    expect(currentSettings().selectionImages).toBe(false);
-    saveSettings({ ...defaults, selectionImages: true }, false);
-    expect(currentSettings().selectionImages).toBe(true);
+  it("upgrades the previous default image model once while preserving custom models and later choices", () => {
     localStorage.setItem(
       "fcboard-settings",
-      JSON.stringify({ selectionImages: "true" }),
+      JSON.stringify({ imageModel: "doubao-seedream-5-0-flash-260915" }),
     );
-    expect(currentSettings().selectionImages).toBe(false);
+    expect(currentSettings().imageModel).toBe("doubao-seedream-5-5-261028");
+    saveSettings(
+      { ...defaults, imageModel: "doubao-seedream-5-0-flash-260915" },
+      false,
+    );
+    expect(currentSettings().imageModel).toBe(
+      "doubao-seedream-5-0-flash-260915",
+    );
+    localStorage.setItem(
+      "fcboard-settings",
+      JSON.stringify({ imageModel: "custom-deployment" }),
+    );
+    expect(currentSettings().imageModel).toBe("custom-deployment");
+  });
+  it("ignores obsolete screenshot and assistant mode preferences", () => {
+    localStorage.setItem(
+      "fcboard-settings",
+      JSON.stringify({ selectionImages: false, assistantVoice: "duplex" }),
+    );
+    expect(currentSettings()).not.toHaveProperty("selectionImages");
+    expect(currentSettings()).not.toHaveProperty("assistantVoice");
   });
   it("reads real board text without encoding a screenshot when capture is disabled", async () => {
     const api = sceneAPI();
@@ -222,9 +240,11 @@ describe("AI configuration and transport", () => {
   it("cancels native requests promptly and ignores their late results", async () => {
     vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
     let finish!: (
-      value: Awaited<ReturnType<typeof CapacitorHttp.post>>,
+      value: Awaited<ReturnType<typeof Classroom.postAIStream>>,
     ) => void;
-    vi.spyOn(CapacitorHttp, "post").mockImplementation(
+    vi.spyOn(Classroom,"addListener").mockResolvedValue({remove:vi.fn().mockResolvedValue(undefined)});
+    vi.spyOn(Classroom,"cancelAIStream").mockResolvedValue(undefined);
+    vi.spyOn(Classroom, "postAIStream").mockImplementation(
       () =>
         new Promise((resolve) => {
           finish = resolve;
@@ -236,13 +256,13 @@ describe("AI configuration and transport", () => {
       model: "test",
       apiKey: "test",
     });
+    await vi.waitFor(() => expect(finish).toBeDefined());
     caller.abort();
     await expect(request).rejects.toMatchObject({ name: "AbortError" });
     finish({
       status: 200,
-      headers: {},
-      url: defaults.endpoint,
-      data: { choices: [{ message: { content: "stale" } }] },
+      data: JSON.stringify({ choices: [{ message: { content: "stale" } }] }),
+      stream: false,
     });
   });
 
@@ -264,7 +284,7 @@ describe("AI configuration and transport", () => {
         }),
     });
     expect(await chat([], undefined, settings)).toBe("answer");
-    expect(currentSettings().model).toBe("doubao-seed-2-0-mini-260428");
+    expect(currentSettings().model).toBe("doubao-seed-2-1-lite-260915");
   });
 });
 

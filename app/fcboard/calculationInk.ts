@@ -122,19 +122,22 @@ export const columnInkRows = (input: InkInput): InkInput[] | undefined => {
   );
 };
 
-/** CoMER can transcribe a handwritten 1 as a bar, capital I or lowercase l.
- * Resolve a lone stem only in a numeric sum with a separately drawn cross. */
+/** Resolve ambiguous numeric stems only when every written plus and operand
+ * is present. A long sum uses the same geometry checks as a two-term sum. */
 export const numericSumCandidate = (input: InkInput, candidate: string) => {
   const match = candidate
     .trim()
-    .match(/^([0-9]+|[|Il])\s*\+\s*([0-9]+|[|Il])\s*([=＝]?)$/);
+    .match(/^((?:[0-9]+|[|Il])(?:\s*\+\s*(?:[0-9]+|[|Il]))+)\s*([=＝]?)$/);
   if (!match || !/[|Il]/.test(candidate)) {
     return candidate;
   }
+  const tokens = match[1].split(/\s*\+\s*/);
   const ending = calculationInk(input);
   const bounds = boxes(
     ending.complete && ending.strokes === input ? input.slice(0, -2) : input,
   );
+  const pluses: { bar: typeof bounds[number]; stem: typeof bounds[number] }[] =
+    [];
   for (const bar of bounds) {
     if (width(bar) < 4 || height(bar) > width(bar) * 0.2) {
       continue;
@@ -149,46 +152,49 @@ export const numericSumCandidate = (input: InkInput, candidate: string) => {
     const cx = (stem.left + stem.right) / 2;
     const cy = (bar.top + bar.bottom) / 2;
     if (
-      width(stem) > height(stem) * 0.25 ||
-      cx < bar.left + width(bar) * 0.2 ||
-      cx > bar.right - width(bar) * 0.2 ||
-      cy < stem.top + height(stem) * 0.2 ||
-      cy > stem.bottom - height(stem) * 0.2 ||
-      height(stem) < width(bar) * 0.35
+      width(stem) <= height(stem) * 0.25 &&
+      cx >= bar.left + width(bar) * 0.2 &&
+      cx <= bar.right - width(bar) * 0.2 &&
+      cy >= stem.top + height(stem) * 0.2 &&
+      cy <= stem.bottom - height(stem) * 0.2 &&
+      height(stem) >= width(bar) * 0.35
     ) {
-      continue;
-    }
-    const read = (side: typeof bounds, token: string) => {
-      if (!side.length) {
-        return;
-      }
-      if (/^\d+$/.test(token)) {
-        return token;
-      }
-      const [one] = side;
-      if (
-        side.length === 1 &&
-        height(one) >= height(stem) * 0.8 &&
-        width(one) <= height(one) * 0.2 &&
-        one.top < cy &&
-        one.bottom > cy
-      ) {
-        return "1";
-      }
-    };
-    const left = read(
-      bounds.filter((box) => box.right < bar.left),
-      match[1],
-    );
-    const right = read(
-      bounds.filter((box) => box.left > bar.right),
-      match[2],
-    );
-    if (left && right) {
-      return `${left}+${right}${match[3]}`;
+      pluses.push({ bar, stem });
     }
   }
-  return candidate;
+  pluses.sort((a, b) => a.bar.left - b.bar.left);
+  if (pluses.length !== tokens.length - 1) {
+    return candidate;
+  }
+  const values = tokens.map((token, index) => {
+    const before = pluses[index - 1];
+    const after = pluses[index];
+    const side = bounds.filter(
+      (box) =>
+        (!before || box.left > before.bar.right) &&
+        (!after || box.right < after.bar.left),
+    );
+    if (!side.length) {
+      return undefined;
+    }
+    if (/^\d+$/.test(token)) {
+      return token;
+    }
+    const [one] = side;
+    const { bar, stem } = after || before;
+    const cy = (bar.top + bar.bottom) / 2;
+    if (
+      side.length === 1 &&
+      height(one) >= height(stem) * 0.8 &&
+      width(one) <= height(one) * 0.2 &&
+      one.top < cy &&
+      one.bottom > cy
+    ) {
+      return "1";
+    }
+    return undefined;
+  });
+  return values.every(Boolean) ? `${values.join("+")}${match[2]}` : candidate;
 };
 
 const divisionSigns = (bounds: ReturnType<typeof boxes>, typical: number) => {

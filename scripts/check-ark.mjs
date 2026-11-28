@@ -15,7 +15,7 @@ if (!key) {
   );
 }
 const redact = (value) => String(value).replaceAll(key, "[REDACTED]");
-const model = process.env.ARK_MODEL || "doubao-seed-2-0-mini-260428";
+const model = process.env.ARK_MODEL || "doubao-seed-2-1-lite-260915";
 const textOutput = (response) =>
   response?.output
     ?.filter((item) => item.type === "message")

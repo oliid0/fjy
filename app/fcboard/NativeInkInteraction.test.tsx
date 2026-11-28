@@ -237,6 +237,25 @@ it("routes sideboard semantic buttons and leaves focused text input out of nativ
       );
     });
     expect(create).toHaveBeenCalledTimes(1);
+    const originalTip = api.getAppState().whiteboardPenTip;
+    await act(async () => {
+      backend.listeners.forEach((listener) =>
+        listener({ owner: api.id, action: "tip" }),
+      );
+    });
+    expect(api.getAppState().whiteboardPenTip).not.toBe(originalTip);
+    await act(async () => {
+      backend.listeners.forEach((listener) => listener({ locked: true }));
+    });
+    expect(
+      screen.getByRole("status", { name: t("fcboard.touch_locked") }),
+    ).toBeInTheDocument();
+    await act(async () => {
+      backend.listeners.forEach((listener) => listener({ locked: false }));
+    });
+    expect(
+      screen.queryByRole("status", { name: t("fcboard.touch_locked") }),
+    ).toBeNull();
     for (const action of ["save", "share"]) {
       await act(async () => {
         backend.listeners.forEach((listener) =>
@@ -390,6 +409,11 @@ it("keeps movable SVG geometry controls and the split screen out of main native 
     .spyOn(gizmo, "getBoundingClientRect")
     .mockReturnValue(new DOMRect(100, 120, 320, 190));
   layer.append(gizmo);
+  const toolbar = document.createElement("button");
+  document.body.append(toolbar);
+  const toolbarBounds = vi
+    .spyOn(toolbar, "getBoundingClientRect")
+    .mockReturnValue(new DOMRect(10, 10, 40, 40));
   const split = document.createElement("div");
   split.className = "fc-split-board";
   render(<NativeInkInteraction api={api} />);
@@ -400,6 +424,7 @@ it("keeps movable SVG geometry controls and the split screen out of main native 
         100, 120, 420, 310,
       ]),
     );
+    toolbarBounds.mockClear();
     bounds.mockReturnValue(new DOMRect(400, 300, 190, 320));
     gizmo.setAttribute("transform", "translate(400 300) rotate(90)");
     await waitFor(() =>
@@ -407,6 +432,7 @@ it("keeps movable SVG geometry controls and the split screen out of main native 
         400, 300, 590, 620,
       ]),
     );
+    expect(toolbarBounds).not.toHaveBeenCalled();
     document.body.append(split);
     await waitFor(() =>
       expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(false),
@@ -418,6 +444,7 @@ it("keeps movable SVG geometry controls and the split screen out of main native 
   } finally {
     split.remove();
     layer.remove();
+    toolbar.remove();
   }
 });
 

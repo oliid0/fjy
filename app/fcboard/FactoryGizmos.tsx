@@ -204,6 +204,11 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
         handlers.current?.move(event as unknown as ReactPointerEvent);
       }
     };
+    const cancel = (event: PointerEvent) => {
+      if (contacts.current.has(event.pointerId)) {
+        restore();
+      }
+    };
     const outsideUp = (event: PointerEvent) => {
       if (
         !(event.target instanceof Node) ||
@@ -216,7 +221,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
     window.addEventListener("blur", blur);
     window.addEventListener("pointermove", outsideMove);
     window.addEventListener("pointerup", outsideUp);
-    window.addEventListener("pointercancel", blur);
+    window.addEventListener("pointercancel", cancel);
     refresh();
     return () => {
       restore();
@@ -227,7 +232,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
       window.removeEventListener("blur", blur);
       window.removeEventListener("pointermove", outsideMove);
       window.removeEventListener("pointerup", outsideUp);
-      window.removeEventListener("pointercancel", blur);
+      window.removeEventListener("pointercancel", cancel);
     };
     // Restore uses the live command target and gesture ref, never a captured pose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -446,16 +451,6 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
           measurement: Math.round((length / (140 * GIZMO_UNIT)) * 100) / 100,
         },
       };
-      if (previewFrame.current === undefined) {
-        previewFrame.current = requestAnimationFrame(() => {
-          previewFrame.current = undefined;
-          if (gesture.current === active) {
-            setPreview([...active.points]);
-            renderWidget(api, active.next, false, { preview: true });
-          }
-        });
-      }
-      return;
     } else if (active.action === "move") {
       active.next = {
         ...original,
@@ -591,7 +586,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
           return;
         }
         try {
-          if (active.action === "drawArc") {
+          if (["line", "verticalLine", "drawArc"].includes(active.action)) {
             setPreview([...active.points]);
           }
           renderWidget(api, active.next, false, { preview: true });
@@ -682,9 +677,13 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
         }}
         onPointerMove={move}
         onPointerUp={finish}
-        onPointerCancel={restore}
-        onLostPointerCapture={() => {
-          if (gesture.current) {
+        onPointerCancel={(event) => {
+          if (contacts.current.has(event.pointerId)) {
+            restore();
+          }
+        }}
+        onLostPointerCapture={(event) => {
+          if (contacts.current.has(event.pointerId)) {
             restore();
           }
         }}

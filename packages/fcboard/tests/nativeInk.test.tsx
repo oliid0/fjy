@@ -586,3 +586,72 @@ it("rejects a native cut if the source was moved while the worker was running", 
   act(() => api.nativeEraserGesture!({ ...input, phase: "cancel" }));
   unregister();
 });
+
+it.each([false, true])(
+  "ordinary native erasing removes text with a worker=%s and restores it on cancellation",
+  async (worker) => {
+    await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    const api = window.h.app.api;
+    const text = API.createElement({
+      type: "text",
+      x: 100,
+      y: 100,
+      text: "文字笔 AI 手写体",
+      groupIds: ["lesson"],
+    });
+    const neighbor = API.createElement({
+      type: "rectangle",
+      x: 100,
+      y: 400,
+      width: 60,
+      height: 60,
+      groupIds: ["lesson"],
+    });
+    const locked = API.createElement({
+      type: "text",
+      x: 100,
+      y: 100,
+      text: "locked",
+      locked: true,
+    });
+    API.updateScene({ elements: [text, neighbor, locked] });
+    act(() => {
+      api.setActiveTool({ type: "eraser" });
+      api.updateScene({ appState: { eraserMode: "stroke" } });
+    });
+    const unregister = worker
+      ? api.registerNativeEraserBackend!(async () => [])
+      : () => {};
+    const input = {
+      id: "text-eraser",
+      width: 20,
+      height: 24,
+      points: [[110, 110, 0.5]] as [number, number, number][],
+    };
+    try {
+      await act(async () => {
+        await api.nativeEraserGesture!({ ...input, phase: "start" });
+      });
+      expect(api.getSceneElements().map((element) => element.id)).toEqual([
+        neighbor.id,
+        locked.id,
+      ]);
+      act(() => api.nativeEraserGesture!({ ...input, phase: "cancel" }));
+      expect(api.getSceneElements().map((element) => element.id)).toEqual([
+        text.id,
+        neighbor.id,
+        locked.id,
+      ]);
+      await act(async () => {
+        await api.nativeEraserGesture!({ ...input, phase: "start" });
+        await api.nativeEraserGesture!({ ...input, phase: "end" });
+      });
+      expect(api.getSceneElements().map((element) => element.id)).toEqual([
+        neighbor.id,
+        locked.id,
+      ]);
+    } finally {
+      unregister();
+    }
+  },
+);

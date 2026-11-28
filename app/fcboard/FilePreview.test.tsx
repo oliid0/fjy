@@ -2562,9 +2562,7 @@ it("runs Creative from a real courseware selection and replaces the visible one-
       width: 300,
       height: 200,
     });
-  const controls = render(
-    <SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />,
-  );
+  const controls = render(<SelectionActions api={api} />);
   try {
     draw();
     await act(async () => {
@@ -2762,9 +2760,7 @@ it("crops courseware images from their original pixels, persists the SVG window,
 
 it("merges document expressions through the real selection menu, preserving one-step undo", async () => {
   const { api, unmount } = await setup();
-  const controls = render(
-    <SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />,
-  );
+  const controls = render(<SelectionActions api={api} />);
   try {
     await act(async () => {
       for (const expression of ["x-1", "x+1"]) {
@@ -3137,7 +3133,7 @@ it("uses the actual courseware circle for a word card while keeping whole-object
   const panel = render(
     <>
       <LanguagePanel api={host.api} />
-      <SelectionActions api={host.api} onPlot={vi.fn()} onRequest={vi.fn()} />
+      <SelectionActions api={host.api} />
     </>,
   );
   const context = () =>

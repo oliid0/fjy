@@ -14,7 +14,6 @@ import { classroomCommands } from "./commands";
 import { boardInk } from "./digitalInk";
 import { selectionSignature } from "./selection";
 import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
-import { currentSettings } from "./settings";
 import { createNarrator } from "./narration";
 import { createStudyAudio } from "./studyAudio";
 
@@ -138,9 +137,10 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
             args.sourceIds.every((value) => typeof value === "string")
               ? (args.sourceIds as string[])
               : [id];
-          const linked = !args.region
-            ? ids.map((id) => readLanguageCard(api, id))
-            : [];
+          const linked =
+            !args.region && args.sourceIds === undefined
+              ? ids.map((id) => readLanguageCard(api, id))
+              : [];
           const source =
             linked[0] &&
             linked.every((item) => item?.token === linked[0]?.token)
@@ -192,7 +192,7 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
                 name: "language.translate",
                 args: {
                   sourceIds: source?.sourceIds || ids,
-                  study: !!currentSettings().apiKey.trim(),
+                  study: true,
                   region: args.region,
                   insert: false,
                   signal: controller.signal,

@@ -1,3 +1,4 @@
+import { currentSettings } from "./settings";
 import { getLanguage, t } from "@fcboard/fcboard/i18n";
 import {
   CaptureUpdateAction,
@@ -14,7 +15,8 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { insertMagicInk } from "./magicPen";
-import { InkRequests } from "./inkRequests";
+import { InkRequests, extendsInkRequest } from "./inkRequests";
+import { calculationInk } from "./calculationInk";
 import { noteLocalInferenceActivity } from "./localInferenceQueue";
 
 import { boardContext } from "./ai";
@@ -59,6 +61,10 @@ export const observeInkAssistance = (
   const settled = new Set<string>();
   const writing = new Set<string>();
   const requests = new InkRequests();
+  const calculations = new Map<
+    string,
+    { source: string[]; answers: Set<string>; ink: ReturnType<typeof boardInk> }
+  >();
   let previous = "";
   let disposed = false;
   let observedScene:
@@ -66,6 +72,44 @@ export const observeInkAssistance = (
     | undefined;
   let observedButton: string | undefined;
   let recognitionLocale = getLanguage().code;
+  // A pause can produce an answer before the user finishes a longer chain.
+  // Nearby continuation retires that answer and resubmits the complete source.
+  const continueCalculation = (
+    stroke: import("@fcboard/element/types").FcboardFreeDrawElement,
+  ) => {
+    if (
+      stroke.customData?.fcGenerated ||
+      stroke.customData?.fcInk?.assist !== "calculation"
+    ) {
+      return;
+    }
+    for (const [signature, calculation] of calculations) {
+      if (
+        calculation.source.includes(stroke.id) ||
+        !extendsInkRequest(
+          { ink: calculation.ink, mode: "calculation", started: true },
+          boardInk([stroke]),
+        )
+      ) {
+        continue;
+      }
+      calculations.delete(signature);
+      const scene = api.getSceneElements();
+      const source = scene.filter((item) =>
+        calculation.source.includes(item.id),
+      );
+      if (selectionSignature(source) !== signature) {
+        continue;
+      }
+      calculation.source.forEach((id) => seen.delete(id));
+      failed.delete(`${signature}:`);
+      previous = "";
+      api.updateScene({
+        elements: scene.filter((item) => !calculation.answers.has(item.id)),
+        captureUpdate: CaptureUpdateAction.EVENTUALLY,
+      });
+    }
+  };
   const refresh = (rescan = false) => {
     if (disposed) {
       return;
@@ -84,6 +128,11 @@ export const observeInkAssistance = (
     if (currentScene !== observedScene || rescan) {
       const present = new Set(currentScene.map((element) => element.id));
       requests.prune(present);
+      for (const [key, calculation] of calculations) {
+        if (calculation.source.some((id) => !present.has(id))) {
+          calculations.delete(key);
+        }
+      }
       for (const id of settled) {
         if (!present.has(id)) {
           settled.delete(id);
@@ -282,10 +331,6 @@ export const observeInkAssistance = (
             const [left, top, right, bottom] = getCommonBounds(source);
             await insertMagicInk(
               api,
-              async () =>
-                (
-                  await boardContext(api, false, source, undefined, true, false)
-                ).image || "",
               boardInk(source),
               request.signal,
               {
@@ -349,11 +394,11 @@ export const observeInkAssistance = (
               undefined,
               { fcLanguage: { group, source: false } },
               source,
-              "text",
+              currentSettings().answerStyle,
               {
                 mode: "below",
+                textOnly: true,
                 sourceLines: result.text?.split("\n").length,
-                groupId: group,
                 sourceUpdates: source.map((element, index) => ({
                   id: element.id,
                   data: {
@@ -379,6 +424,9 @@ export const observeInkAssistance = (
                 },
               });
             } else {
+              const before = new Set(
+                api.getSceneElements().map((element) => element.id),
+              );
               insertText(
                 api,
                 calculationAnswerText(result),
@@ -392,6 +440,21 @@ export const observeInkAssistance = (
                     result.layout?.lines || result.text?.split("\n").length,
                 },
               );
+              if (
+                !(result.hasEquals ?? calculationInk(boardInk(source)).complete) &&
+                !/[=＝]\s*$/.test(result.text || "")
+              ) {
+                calculations.set(signature, {
+                  source: source.map((element) => element.id),
+                  answers: new Set(
+                    api
+                      .getSceneElements()
+                      .filter((element) => !before.has(element.id))
+                      .map((element) => element.id),
+                  ),
+                  ink: boardInk(source),
+                });
+              }
             }
             source.forEach((element) => seen.add(element.id));
             return;
@@ -552,6 +615,7 @@ export const observeInkAssistance = (
   const inkProgress = api.onInkProgress?.((stroke, phase) => {
     if (phase === "start" || phase === "update") {
       writing.add(stroke.id);
+      continueCalculation(stroke);
       const mode = inkAssistMode(stroke.customData?.fcInk?.assist);
       if (mode) {
         noteLocalInferenceActivity();
@@ -573,6 +637,7 @@ export const observeInkAssistance = (
     if (classroomCommands.has("document.draw")) {
       return;
     }
+    continueCalculation(stroke);
     settled.add(stroke.id);
     queueMicrotask(() => refresh(true));
     tables.commit(stroke);
@@ -620,6 +685,7 @@ export const observeInkAssistance = (
     }
   });
   const invalidate = classroomCommands.onInvalidate(() => {
+    calculations.clear();
     settled.clear();
     writing.clear();
     requests.cancelAll();
@@ -632,6 +698,7 @@ export const observeInkAssistance = (
         ?.active || "";
     if (active !== board) {
       board = active;
+      calculations.clear();
       settled.clear();
       writing.clear();
       requests.cancelAll();

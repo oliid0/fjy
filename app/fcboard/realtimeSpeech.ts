@@ -57,10 +57,9 @@ export const startRealtimeSpeech = async (
       const handle = await attempt.opening.catch(() => undefined);
       await handle?.cancel().catch(() => {});
       if (!closed) {
-        // One fresh WSS session handles a transient disconnect. Authentication
-        // or configuration failures fall back immediately and remain visible.
+        // Retry transient interruptions; successful speech resets the consecutive failure count.
         const retryCloud =
-          reconnects++ < 1 &&
+          reconnects++ < 3 &&
           !recognitionPattern("realtimeSpeech_0").test(
             error instanceof Error ? error.message : String(error),
           );
@@ -83,6 +82,7 @@ export const startRealtimeSpeech = async (
     current = attempt;
     const deliver = (line: TranscriptLine) => {
       if (!cancelled && !finished && current === attempt && !attempt.recovery) {
+        reconnects = 0;
         const time = offset + line.time;
         latestTime = Math.max(latestTime, time);
         onLine({ ...line, time: separateSpeakers ? time : latestTime });

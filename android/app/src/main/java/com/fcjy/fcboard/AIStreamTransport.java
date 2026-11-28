@@ -1,16 +1,19 @@
 package com.fcjy.fcboard;
 
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import okhttp3.Call;
+import okhttp3.Dispatcher;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 /** Incremental UTF-8 HTTP transport. No model rules, credentials or responses are persisted. */
 final class AIStreamTransport {
@@ -19,21 +22,19 @@ final class AIStreamTransport {
         void complete(int status, String data, boolean stream);
         void failed(Exception error);
     }
-    private final Map<String, Request> active = new ConcurrentHashMap<>();
-    // Six background agents plus a conversation and live lesson observation.
-    // Admission matches worker capacity so accepted requests never sit in a FIFO.
-    private static final int MAX_REQUESTS = 8;
-    private final ExecutorService workers = Executors.newFixedThreadPool(MAX_REQUESTS);
+    private final Map<String, Call> active = new ConcurrentHashMap<>();
+    private final OkHttpClient client;
     private boolean closed;
 
-    private static final class Request {
-        volatile HttpURLConnection connection;
-        volatile boolean cancelled;
-        void cancel() {
-            cancelled = true;
-            HttpURLConnection current = connection;
-            if (current != null) current.disconnect();
-        }
+    AIStreamTransport() {
+        Dispatcher dispatcher = new Dispatcher();
+        dispatcher.setMaxRequests(64);
+        dispatcher.setMaxRequestsPerHost(64);
+        client = new OkHttpClient.Builder().dispatcher(dispatcher)
+            .followRedirects(false).followSslRedirects(false)
+            .retryOnConnectionFailure(false)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS).build();
     }
 
     static URL checkedURL(String value) throws Exception {
@@ -60,60 +61,58 @@ final class AIStreamTransport {
     }
 
     synchronized void start(String id, String endpoint, Map<String, String> headers, String body, Callback callback) throws Exception {
-        if (closed || id == null || active.size() >= MAX_REQUESTS || active.containsKey(id)) throw new IOException("AI transport unavailable");
+        if (closed || id == null || active.containsKey(id)) throw new IOException("AI transport unavailable");
         URL url = checkedURL(endpoint);
         if (body == null || body.length() > 24_000_000) throw new IOException("Invalid AI request");
-        Request request = new Request();
+        Request.Builder builder = new Request.Builder().url(url)
+            .post(RequestBody.create(body, MediaType.get("application/json; charset=utf-8")));
+        for (Map.Entry<String, String> header : headers.entrySet()) builder.header(header.getKey(), header.getValue());
+        Call request = client.newCall(builder.build());
         active.put(id, request);
-        workers.execute(() -> {
-            try {
-                if (request.cancelled) throw new IOException("AI request cancelled");
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                request.connection = connection;
-                connection.setInstanceFollowRedirects(false); // Never forward Authorization to a redirect target.
-                connection.setRequestMethod("POST");
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(90000);
-                connection.setDoOutput(true);
-                for (Map.Entry<String, String> header : headers.entrySet()) connection.setRequestProperty(header.getKey(), header.getValue());
-                byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-                // Buffer the bounded request: JDK streaming-output mode disconnects
-                // on 401 before getErrorStream() can retain the provider's error.
-                // Response reads below remain incremental for SSE.
-                if (request.cancelled) throw new IOException("AI request cancelled");
-                try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
-                int status = connection.getResponseCode();
-                String type = connection.getContentType();
-                boolean stream = status >= 200 && status < 300 && type != null && type.contains("text/event-stream");
-                InputStream input = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
-                StringBuilder data = new StringBuilder();
-                if (input != null) try (InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
-                    char[] buffer = new char[2048];
-                    int count;
-                    int total = 0;
-                    while ((count = reader.read(buffer)) != -1) {
-                        if (request.cancelled) throw new IOException("AI request cancelled");
-                        total += count;
-                        if (total > 8_000_000) throw new IOException("AI response too large");
-                        String chunk = new String(buffer, 0, count);
-                        if (stream) callback.chunk(chunk); else data.append(chunk);
+        request.enqueue(new okhttp3.Callback() {
+            @Override public void onFailure(Call call, IOException error) {
+                active.remove(id, call);
+                callback.failed(error);
+            }
+            @Override public void onResponse(Call call, Response response) {
+                try (Response received = response) {
+                    int status = received.code();
+                    String type = received.header("Content-Type", "");
+                    boolean stream = status >= 200 && status < 300 && type.contains("text/event-stream");
+                    StringBuilder data = new StringBuilder();
+                    if (received.body() != null) try (InputStreamReader reader = new InputStreamReader(received.body().byteStream(), StandardCharsets.UTF_8)) {
+                        char[] buffer = new char[2048];
+                        int count;
+                        int total = 0;
+                        while ((count = reader.read(buffer)) != -1) {
+                            if (call.isCanceled()) throw new IOException("AI request cancelled");
+                            total += count;
+                            // Image generation shares this cancellable transport (bounded base64 PNG).
+                            if (total > 32_000_000) throw new IOException("AI response too large");
+                            String chunk = new String(buffer, 0, count);
+                            if (stream) callback.chunk(chunk); else data.append(chunk);
+                        }
                     }
+                    if (call.isCanceled()) throw new IOException("AI request cancelled");
+                    active.remove(id, call);
+                    callback.complete(status, data.toString(), stream);
+                } catch (Exception error) {
+                    active.remove(id, call);
+                    callback.failed(error);
                 }
-                if (request.cancelled) throw new IOException("AI request cancelled");
-                callback.complete(status, data.toString(), stream);
-            } catch (Exception error) { callback.failed(error); }
-            finally {
-                active.remove(id, request);
-                request.cancel();
             }
         });
     }
 
-    void cancel(String id) { Request request = id == null ? null : active.get(id); if (request != null) request.cancel(); }
+    void cancel(String id) {
+        Call request = id == null ? null : active.get(id);
+        if (request != null) request.cancel();
+    }
     synchronized void close() {
         closed = true;
-        for (Request request : active.values()) request.cancel();
-        workers.shutdownNow();
+        client.dispatcher().cancelAll();
+        client.dispatcher().executorService().shutdown();
+        client.connectionPool().evictAll();
         active.clear();
     }
 }

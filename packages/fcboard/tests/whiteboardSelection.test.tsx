@@ -992,3 +992,33 @@ it("keeps imported standalone function objects independent when optional composi
   expect(h.state.selectedElementIds).toEqual({ [objects[0].id]: true });
   expect(h.state.whiteboardSelection?.elementIds).toEqual([objects[0].id]);
 });
+
+it("circles only one language word without expanding its metadata group to the sentence or translation", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  h.state.width = 1600;
+  h.state.height = 900;
+  const parts = [100, 230, 360].map((x, index) => ({
+    ...API.createElement({
+      type: "freedraw",
+      x,
+      y: 100,
+      points: [pointFrom(0, 0), pointFrom(40, 40)],
+      groupIds: ["old-language-group"],
+    }),
+    customData: {
+      fcLanguage: { group: "sentence", source: index !== 2 },
+      fcInk: { version: 2, pen: "hard", assist: "language" },
+    },
+  }));
+  API.updateScene({ elements: parts });
+  act(() => {
+    h.app.setActiveTool({ type: "lasso" });
+    h.app.lassoTrail.startPath(80, 80);
+    h.app.lassoTrail.addPointToPath(165, 80);
+    h.app.lassoTrail.addPointToPath(165, 160);
+    h.app.lassoTrail.addPointToPath(80, 160);
+    h.app.lassoTrail.finishPath();
+  });
+  expect(Object.keys(h.state.selectedElementIds)).toEqual([parts[0].id]);
+  expect(h.state.whiteboardSelection!.elementIds).toEqual([parts[0].id]);
+});

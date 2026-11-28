@@ -1,4 +1,4 @@
-import { Capacitor, CapacitorHttp } from "@capacitor/core";
+import { Capacitor } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
@@ -8,6 +8,7 @@ import {
   insertGeneratedImage,
   insertImageResult,
 } from "./imageGeneration";
+import { Classroom } from "./native";
 import { sceneAPI } from "./test/scene";
 import { registerCanvasCommands } from "./canvasCommands";
 import { selectionSignature } from "./selection";
@@ -15,9 +16,14 @@ import { classroomCommands } from "./commands";
 import { realtimeCommand } from "./realtimeTools";
 import { defaults, saveSettings } from "./settings";
 
-vi.mock("@capacitor/core", async (original) => ({
-  ...(await original<typeof import("@capacitor/core")>()),
-  CapacitorHttp: { post: vi.fn() },
+vi.mock("./native", () => ({
+  Classroom: {
+    addListener: vi
+      .fn()
+      .mockResolvedValue({ remove: vi.fn().mockResolvedValue(undefined) }),
+    postAIStream: vi.fn(),
+    cancelAIStream: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 const image =
@@ -60,7 +66,7 @@ it("uses the independent image endpoint and inserts an ordinary image object wit
   );
   const fetcher = vi.fn().mockResolvedValue({
     status: 200,
-    json: async () => ({ data: [{ b64_json: image }] }),
+    text: async () => JSON.stringify({ data: [{ b64_json: image }] }),
   });
   vi.stubGlobal("fetch", fetcher);
   vi.stubGlobal(
@@ -117,7 +123,7 @@ it("inserts a successful custom-model generation without unsupported decompositi
   );
   const fetcher = vi.fn().mockResolvedValue({
     status: 200,
-    json: async () => ({ data: [{ b64_json: image }] }),
+    text: async () => JSON.stringify({ data: [{ b64_json: image }] }),
   });
   vi.stubGlobal("fetch", fetcher);
   vi.stubGlobal(
@@ -151,7 +157,7 @@ it("generates an explicitly requested illustration through the real command and 
   );
   const fetcher = vi.fn().mockResolvedValue({
     status: 200,
-    json: async () => ({ data: [{ b64_json: image }] }),
+    text: async () => JSON.stringify({ data: [{ b64_json: image }] }),
   });
   vi.stubGlobal("fetch", fetcher);
   vi.stubGlobal(
@@ -213,7 +219,10 @@ it("does not import a late generated image after cancellation", async () => {
   } as unknown as FcboardImperativeAPI;
   const result = insertGeneratedImage(api, "月球", controller.signal);
   controller.abort();
-  finish({ status: 200, json: async () => ({ data: [{ b64_json: image }] }) });
+  finish({
+    status: 200,
+    text: async () => JSON.stringify({ data: [{ b64_json: image }] }),
+  });
   await expect(result).rejects.toMatchObject({ name: "AbortError" });
   expect(api.addFiles).not.toHaveBeenCalled();
   expect(api.updateScene).not.toHaveBeenCalled();
@@ -230,7 +239,7 @@ it.each(["source", "surface"])(
       "fetch",
       vi.fn().mockResolvedValue({
         status: 200,
-        json: async () => ({ data: [{ b64_json: image }] }),
+        text: async () => JSON.stringify({ data: [{ b64_json: image }] }),
       }),
     );
     let finish!: () => void;
@@ -280,7 +289,7 @@ it("does not shrink a text-to-image result to the height of one handwritten prom
     "fetch",
     vi.fn().mockResolvedValue({
       status: 200,
-      json: async () => ({ data: [{ b64_json: image }] }),
+      text: async () => JSON.stringify({ data: [{ b64_json: image }] }),
     }),
   );
   vi.stubGlobal(
@@ -320,9 +329,10 @@ it("reports a per-image provider error inside HTTP 200 without replacing the han
     "fetch",
     vi.fn().mockResolvedValue({
       status: 200,
-      json: async () => ({
-        data: [{ error: { message: "image generation unavailable" } }],
-      }),
+      text: async () =>
+        JSON.stringify({
+          data: [{ error: { message: "image generation unavailable" } }],
+        }),
     }),
   );
   const api = sceneAPI();
@@ -347,7 +357,7 @@ const pngGeneration = () => {
   );
   const fetcher = vi.fn().mockResolvedValue({
     status: 200,
-    json: async () => ({ data: [{ b64_json: image }] }),
+    text: async () => JSON.stringify({ data: [{ b64_json: image }] }),
   });
   vi.stubGlobal("fetch", fetcher);
   return { api: sceneAPI(), fetcher };
@@ -408,7 +418,7 @@ it("keeps every returned creative pixel with no alpha pass, background option or
     output_format: "png",
     image: "data:image/png;base64,selection",
   });
-  expect(body).not.toHaveProperty("background");
+  expect(body.background).toBe("auto");
   expect(body).not.toHaveProperty("layer_decomposition");
   expect(api.addFiles).toHaveBeenCalledWith([
     expect.objectContaining({ dataURL: `data:image/png;base64,${image}` }),
@@ -437,14 +447,14 @@ it("uses the returned magic PNG immediately without a pixel scan, canvas export 
   ]);
 });
 
-it("uses the same one-call transparent PNG body through Android CapacitorHttp", async () => {
+it("uses the same one-call transparent PNG body through the cancellable Android AI transport", async () => {
   const { api, fetcher } = pngGeneration();
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
-  const post = vi.spyOn(CapacitorHttp, "post").mockResolvedValue({
+  vi.mocked(Classroom.addListener).mockResolvedValueOnce({remove:vi.fn().mockResolvedValue(undefined)});
+  const post = vi.spyOn(Classroom, "postAIStream").mockResolvedValue({
     status: 200,
-    data: { data: [{ b64_json: image }] },
-    headers: {},
-    url: "https://image.test",
+    data: JSON.stringify({ data: [{ b64_json: image }] }),
+    stream: false,
   });
   await insertGeneratedImage(
     api,
@@ -456,12 +466,14 @@ it("uses the same one-call transparent PNG body through Android CapacitorHttp", 
     },
   );
   expect(post).toHaveBeenCalledTimes(1);
-  expect(post.mock.calls[0][0].data).toMatchObject({
+  expect(JSON.parse(post.mock.calls[0][0].body)).toMatchObject({
     output_format: "png",
     background: "transparent",
     image: "data:image/png;base64,ink",
   });
-  expect(post.mock.calls[0][0].data).not.toHaveProperty("layer_decomposition");
+  expect(JSON.parse(post.mock.calls[0][0].body)).not.toHaveProperty(
+    "layer_decomposition",
+  );
   expect(fetcher).not.toHaveBeenCalled();
 });
 
@@ -500,4 +512,26 @@ it("inserts the provider PNG on courseware in one guarded transaction", async ()
     unregister();
     unlayout();
   }
+});
+
+it("uses Seedream 5.5 auto background and one screenshot request with no OCR or alpha postprocessing", async () => {
+  const { api, fetcher } = pngGeneration();
+  saveSettings({ ...defaults, apiKey: "test" }, false);
+  await insertGeneratedImage(
+    api,
+    "截图中的文本是本次生图要求，务必遵循；若要求无背景则透明，否则自由生成",
+    new AbortController().signal,
+    { referenceImage: "data:image/png;base64,selection" },
+  );
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({
+    model: "doubao-seedream-5-5-261028",
+    size: "1K",
+    background: "auto",
+    output_format: "png",
+    image: "data:image/png;base64,selection",
+  });
+  expect(api.addFiles).toHaveBeenCalledWith([
+    expect.objectContaining({ dataURL: `data:image/png;base64,${image}` }),
+  ]);
 });

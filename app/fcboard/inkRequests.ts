@@ -45,7 +45,7 @@ const region = (ink: InkInput, mode: string, continuing = false) => {
   });
 };
 
-const joins = (
+export const extendsInkRequest = (
   entry: { ink: InkInput; mode: string; started: boolean },
   incoming: InkInput,
 ) => {
@@ -95,7 +95,7 @@ export class InkRequests {
       if (entry.mode !== mode) {
         continue;
       }
-      if (joins(entry, ink(fresh))) {
+      if (extendsInkRequest(entry, ink(fresh))) {
         this.cancel(request);
         entry.ids.forEach((value) => selected.add(value));
       }
@@ -138,7 +138,7 @@ export class InkRequests {
       if (entry.mode !== mode) {
         continue;
       }
-      if (ink.length && joins(entry, ink)) {
+      if (ink.length && extendsInkRequest(entry, ink)) {
         this.cancel(request);
       }
     }

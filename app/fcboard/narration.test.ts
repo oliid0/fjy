@@ -3,12 +3,28 @@ import { Capacitor } from "@capacitor/core";
 
 import { createNarrator, isNarrationEcho } from "./narration";
 import { OfflineTts, narrationChunks } from "./nativeNarration";
-import * as studyAudio from "./studyAudio";
 
 vi.mock("./nativeNarration", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./nativeNarration")>()),
   OfflineTts: { synthesize: vi.fn(), cancel: vi.fn() },
 }));
+
+// Feed owned clips through the existing explicit audio callback, without any custom TTS setting.
+const testNarrator = () => {
+  const narrator = createNarrator();
+  const speak = narrator.speak.bind(narrator);
+  narrator.speak = (text, options) =>
+    speak(text, {
+      ...options,
+      audio:
+        options?.audio ||
+        (Capacitor.getPlatform() === "web"
+          ? async (signal) =>
+              (await fetch("https://audio.test/clip", { signal })).blob()
+          : undefined),
+    });
+  return narrator;
+};
 
 describe("one audible teacher", () => {
   const pause = vi.fn();
@@ -22,19 +38,6 @@ describe("one audible teacher", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
-    sessionStorage.setItem(
-      "fcboard-settings",
-      JSON.stringify({
-        ttsEndpoint: "https://voice.example.test/v1/audio/speech",
-      }),
-    );
-    // Settings themselves are localStorage; secrets alone live in sessionStorage.
-    localStorage.setItem(
-      "fcboard-settings",
-      JSON.stringify({
-        ttsEndpoint: "https://voice.example.test/v1/audio/speech",
-      }),
-    );
     players.length = 0;
     pause.mockClear();
     play.mockClear();
@@ -68,8 +71,8 @@ describe("one audible teacher", () => {
     vi.restoreAllMocks();
   });
   it("pauses the original voice while answering and resolves each finished promise", async () => {
-    const main = createNarrator();
-    const branch = createNarrator();
+    const main = testNarrator();
+    const branch = testNarrator();
     await main.speak("原课");
     let ended = false;
     void main.finished.then(() => {
@@ -91,7 +94,7 @@ describe("one audible teacher", () => {
   });
   it("filters actual Chinese playback echo while preserving a spoken correction and explicit stop", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1000);
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     await narrator.speak("今天讲解牛顿运动定律以及力和加速度的关系。");
     expect(isNarrationEcho("牛顿运动定律以及力和加速度的关系")).toBe(true);
     expect(isNarrationEcho("搞错了，我今天讲电流电阻")).toBe(false);
@@ -106,7 +109,7 @@ describe("one audible teacher", () => {
       ok: true,
       blob: async () => new Blob(["html"], { type: "text/html" }),
     } as Response);
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     await expect(narrator.speak("讲解")).rejects.toThrow(
       t("fcboard.the_voice_service_returned_invalid_audio"),
     );
@@ -115,7 +118,7 @@ describe("one audible teacher", () => {
     narrator.stop();
   });
   it("ignores replaced audio's late end and error events while the next response is playing", async () => {
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     await narrator.speak("first response");
     const end = players[0].onended;
     const error = players[0].onerror;
@@ -141,7 +144,7 @@ describe("one audible teacher", () => {
   };
   it("uses the bundled Android engine without an endpoint or browser speech service", async () => {
     android();
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     const boundary = vi.fn();
     await narrator.speak("牛顿定律", { onBoundary: boundary });
     expect(OfflineTts.synthesize).toHaveBeenCalledWith({
@@ -160,7 +163,7 @@ describe("one audible teacher", () => {
   });
   it("ignores a finished native chunk's delayed events after the next chunk starts", async () => {
     android();
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     await narrator.speak("A complete sentence for the classroom. ".repeat(8));
     const end = players[0].onended;
     const error = players[0].onerror;
@@ -188,7 +191,7 @@ describe("one audible teacher", () => {
         resolve = done;
       }),
     );
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     const pending = narrator.speak("已经取消");
     narrator.stop();
     resolve({ path: "file:///data/cache/late.wav" });
@@ -204,7 +207,7 @@ describe("one audible teacher", () => {
     expect(chunks.join("")).toBe(text);
     expect(chunks.every((chunk) => Array.from(chunk).length <= 80)).toBe(true);
     expect(chunks.every((chunk) => !/[\ud800-\udbff]$/.test(chunk))).toBe(true);
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     await narrator.speak(text);
     let ended = false;
     void narrator.finished.then(() => {
@@ -222,7 +225,7 @@ describe("one audible teacher", () => {
   });
   it("reports real native and playback errors so teaching can use paced captions", async () => {
     android();
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     vi.mocked(OfflineTts.synthesize).mockRejectedValueOnce(
       new Error("model unavailable"),
     );
@@ -236,7 +239,7 @@ describe("one audible teacher", () => {
     narrator.stop();
   });
   it("plays an owned generated clip through the same audible owner without calling a speech command or generic endpoint", async () => {
-    const narrator = createNarrator();
+    const narrator = testNarrator();
     const audio = vi
       .fn()
       .mockResolvedValue(new Blob(["mp3"], { type: "audio/mpeg" }));
@@ -248,30 +251,5 @@ describe("one audible teacher", () => {
     narrator.stop();
     expect((audio.mock.calls[0][0] as AbortSignal).aborted).toBe(true);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:voice");
-  });
-  it("recognizes the configured PDF audio endpoint and uses its adapter instead of the generic speech schema", async () => {
-    localStorage.setItem(
-      "fcboard-settings",
-      JSON.stringify({
-        ttsEndpoint: studyAudio.AUDIO_GENERATION_ENDPOINT,
-        ttsKey: "speech-key",
-      }),
-    );
-    const generate = vi
-      .fn()
-      .mockResolvedValue(new Blob(["mp3"], { type: "audio/mpeg" }));
-    vi.spyOn(studyAudio, "createStudyAudio").mockReturnValue({
-      generate,
-      clear: vi.fn(),
-    });
-    const narrator = createNarrator();
-    await narrator.speak("Good morning", { language: "en" });
-    expect(generate).toHaveBeenCalledWith(
-      "Good morning",
-      "en",
-      expect.any(AbortSignal),
-    );
-    expect(fetch).not.toHaveBeenCalled();
-    narrator.stop();
   });
 });

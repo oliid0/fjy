@@ -1,3 +1,4 @@
+import { creativeImagePrompt } from "./selectionImagePrompt";
 import { readFileSync, writeFileSync } from "node:fs";
 import { transferableAbortController } from "node:util";
 
@@ -487,7 +488,7 @@ it.runIf(live)(
 );
 
 it.runIf(live).each(["text", "drawing"])(
-  "LIVE: magic %s ink generates and inserts the intended image",
+  "LIVE: creative %s screenshot generates and inserts the intended image",
   async (kind) => {
     const filename =
       kind === "text"
@@ -501,38 +502,22 @@ it.runIf(live).each(["text", "drawing"])(
       false,
     );
     const started = Date.now();
-    const recognized = await recognizeInkContent(
-      "magic",
-      async () => input,
-      [],
-      new AbortController().signal,
-    );
-    expect(recognized.kind).toBe("magic");
-    if (recognized.kind !== "magic") {
-      throw new Error("Magic recognition failed");
-    }
-    expect(recognized.image).toBe(input);
-    expect(recognized.prompt).toContain("若没有文字要求，仅按图生图");
+    const prompt = creativeImagePrompt();
     vi.stubGlobal("Image", PngDimensions);
     const api = sceneAPI();
     const requestCount = traces.length;
     const source = api.getSceneElements().map((element) => element.id);
-    await insertGeneratedImage(
-      api,
-      recognized.prompt,
-      new AbortController().signal,
-      {
-        referenceImage: recognized.image,
-        transparent: recognized.transparent,
-        bounds: {
-          left: 100,
-          top: 100,
-          right: 700,
-          bottom: kind === "text" ? 150 : 500,
-        },
-        replaceIds: source,
+    await insertGeneratedImage(api, prompt, new AbortController().signal, {
+      referenceImage: input,
+      transparent: true,
+      bounds: {
+        left: 100,
+        top: 100,
+        right: 700,
+        bottom: kind === "text" ? 150 : 500,
       },
-    );
+      replaceIds: source,
+    });
     expect(traces.length - requestCount).toBe(1);
     expect(traces.at(-1)?.decomposition).toBe(false);
     const inserted = api.getSceneElements()[0];
@@ -546,8 +531,8 @@ it.runIf(live).each(["text", "drawing"])(
     reports[`magic_${kind}`] = {
       success: true,
       elapsedMs: Date.now() - started,
-      prompt: recognized.prompt,
-      reference: !!recognized.image,
+      prompt: prompt,
+      reference: !!input,
       width: inserted.width,
       height: inserted.height,
     };

@@ -46,7 +46,9 @@ export const runVoiceAgent = async (
         command.name === "agent.start" ? taskSignal : signal,
       ),
     );
-    return;
+    return command.name === "agent.start"
+      ? undefined
+      : t("fcboard.assistant_completed");
   }
   const requireMutation =
     configured.speech === "cloud" && explicitBoardOperation(text);
@@ -58,7 +60,7 @@ export const runVoiceAgent = async (
       command,
       await executeBoardCommand(command, signal),
     );
-    return;
+    return t("fcboard.assistant_completed");
   }
   const endpoint = agentResponsesEndpoint(configured.endpoint);
   const useVision = configured.speech !== "local" && !!configured.apiKey.trim();

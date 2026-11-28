@@ -281,3 +281,39 @@ it("keeps a radical index or an external factor out of standalone square root re
     ]),
   ).toBeUndefined();
 });
+
+it.each([3, 5, 12])(
+  "recovers all ambiguous ones in a %i-term sum only with the complete ink",
+  (count) => {
+    const strokes: InkInput = [];
+    for (let index = 0; index < count; index++) {
+      const x = index * 100;
+      strokes.push([
+        [x, 0],
+        [x, 80],
+      ]);
+      if (index < count - 1) {
+        strokes.push(
+          [
+            [x + 30, 40],
+            [x + 70, 40],
+          ],
+          [
+            [x + 50, 20],
+            [x + 50, 60],
+          ],
+        );
+      }
+    }
+    const candidate = `${Array.from(
+      { length: count },
+      (_, index) => ["I", "l", "|"][index % 3],
+    ).join("+")}=`;
+    expect(numericSumCandidate(strokes, candidate)).toBe(
+      `${Array(count).fill("1").join("+")}=`,
+    );
+    expect(numericSumCandidate(strokes.slice(0, -1), candidate)).toBe(
+      candidate,
+    );
+  },
+);

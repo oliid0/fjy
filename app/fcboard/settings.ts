@@ -18,18 +18,17 @@ export type Settings = {
   translationProvider: "local" | "cloud";
   apiKey: string;
   speechRoutingVersion?: number;
+  imageGenerationVersion?: number;
   speech: "cloud" | "local" | "system" | "custom";
-  assistantVoice: "agent" | "duplex";
   speechResource: string;
   speechEndpoint: string;
   speechKey: string;
+  speechVoice: string;
+  speechSpeed: number;
   speechModel: string;
   speechLanguage: string;
-  ttsEndpoint: string;
-  ttsKey: string;
   autoSummary: boolean;
   autoMath: boolean;
-  selectionImages: boolean;
   answerStyle: "match" | "handwritten" | "text";
 };
 
@@ -37,27 +36,25 @@ export const ARK_VISION_MODEL = "doubao-seed-2-1-lite-260915";
 
 export const defaults: Settings = {
   endpoint: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-  model: "doubao-seed-2-0-mini-260428",
+  model: "doubao-seed-2-1-lite-260915",
   ocrModel: "",
   textModel: "",
-  imageModel: "doubao-seedream-5-0-flash-260915",
+  imageModel: "doubao-seedream-5-5-261028",
   ocr: "auto",
   inkLanguage: "auto",
   mathTranscription: "local",
   translationProvider: "local",
   apiKey: "",
   speech: "system",
-  assistantVoice: "agent",
   speechResource: "volc.seedasr.sauc.duration",
   speechEndpoint: "",
   speechKey: "",
+  speechVoice: "zh_female_vv_jupiter_bigtts",
+  speechSpeed: 0,
   speechModel: "whisper-1",
   speechLanguage: "auto",
-  ttsEndpoint: "",
-  ttsKey: "",
   autoSummary: true,
   autoMath: false,
-  selectionImages: false,
   answerStyle: "match",
 };
 
@@ -72,22 +69,19 @@ export const loadSettings = (): Settings => {
     return {
       ...defaults,
       speech: Capacitor.isNativePlatform() ? "cloud" : defaults.speech,
-      assistantVoice: Capacitor.isNativePlatform()
-        ? "duplex"
-        : defaults.assistantVoice,
       ...preferences,
       speechRoutingVersion: saved.speechRoutingVersion,
       model: saved.model?.trim() || defaults.model,
-      imageModel: saved.imageModel?.trim() || defaults.imageModel,
-      selectionImages: saved.selectionImages === true,
+      imageModel:
+        saved.imageGenerationVersion !== 1 &&
+        saved.imageModel === "doubao-seedream-5-0-flash-260915"
+          ? defaults.imageModel
+          : saved.imageModel?.trim() || defaults.imageModel,
     };
   } catch {
     return {
       ...defaults,
       speech: Capacitor.isNativePlatform() ? "cloud" : defaults.speech,
-      assistantVoice: Capacitor.isNativePlatform()
-        ? "duplex"
-        : defaults.assistantVoice,
     };
   }
 };
@@ -100,7 +94,6 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
     JSON.stringify({
       apiKey: settings.apiKey,
       speechKey: settings.speechKey,
-      ttsKey: settings.ttsKey,
     }),
   );
   localStorage.setItem(
@@ -108,9 +101,9 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
     JSON.stringify({
       ...settings,
       speechRoutingVersion: 1,
+      imageGenerationVersion: 1,
       apiKey: rememberKey ? settings.apiKey : "",
       speechKey: rememberKey ? settings.speechKey : "",
-      ttsKey: rememberKey ? settings.ttsKey : "",
     }),
   );
   window.dispatchEvent(new Event(SETTINGS_CHANGED));

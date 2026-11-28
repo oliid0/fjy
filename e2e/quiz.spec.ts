@@ -3,19 +3,53 @@ import { expect, test } from "@playwright/test";
 import { submitQuiz } from "./quiz";
 
 const endpoint = "https://quiz-test.example/v1/chat/completions";
-const sources = [{ title: "教育部", url: "https://www.moe.gov.cn/" }];
-const cart = `<html><head><title>小车受力示意图</title></head><body>
-<div id="board" data-fc-graphics style="width:600px;height:340px"></div><script>
-var b=JXG.JSXGraph.initBoard('board',{renderer:'svg',boundingbox:[0,5,8,0],showNavigation:false,showCopyright:false,resize:{enabled:false}});
-b.create('polygon',[[1,1],[4,1],[4,3],[1,3]],{vertices:{visible:false,withLabel:false},fillColor:'#fff',fillOpacity:1,borders:{strokeColor:'#000',strokeWidth:2}});
-b.create('arrow',[[4,2],[7,2]],{strokeColor:'#000',strokeWidth:3});
-b.create('text',[1.4,2,'m = 2 kg'],{fontSize:20});b.create('text',[4.6,2.7,'F = 4 N'],{fontSize:20});
-document.dispatchEvent(new Event('fc-figure-ready'));</script></body></html>`;
-const drawing = (html = cart) => ({
-  title: "小车受力示意图",
-  libraries: ["jsxgraph"],
-  html,
-});
+const figure = {
+  mode: "jsxgraph",
+  caption: "小车受力示意图",
+  boundingbox: [0, 5, 8, 0],
+  elements: [
+    {
+      id: "A",
+      type: "point",
+      parents: [1, 1],
+      attributes: { visible: false, withLabel: false },
+    },
+    {
+      id: "B",
+      type: "point",
+      parents: [4, 1],
+      attributes: { visible: false, withLabel: false },
+    },
+    {
+      id: "C",
+      type: "point",
+      parents: [4, 3],
+      attributes: { visible: false, withLabel: false },
+    },
+    {
+      id: "D",
+      type: "point",
+      parents: [1, 3],
+      attributes: { visible: false, withLabel: false },
+    },
+    {
+      id: "cart",
+      type: "polygon",
+      parents: ["A", "B", "C", "D"],
+      attributes: { fillColor: "#fff", fillOpacity: 1 },
+    },
+    {
+      id: "force",
+      type: "arrow",
+      parents: [
+        [4, 2],
+        [7, 2],
+      ],
+    },
+    { id: "mass", type: "text", parents: [1.4, 2, "m = 2 kg"] },
+    { id: "label", type: "text", parents: [4.6, 2.7, "F = 4 N"] },
+  ],
+};
 const question = (index: number) =>
   index % 2 === 0
     ? {
@@ -24,7 +58,6 @@ const question = (index: number) =>
         options: ["保持静止或匀速直线运动", "一定静止", "一直加速"],
         answer: ["A"],
         explanation: "运动状态保持不变。",
-        needsImage: false,
       }
     : {
         type: "calculation",
@@ -37,11 +70,7 @@ const question = (index: number) =>
           "由牛顿第二定律$F=ma$",
           "代入$a=\\frac{F}{m}=\\frac{4}{2}=2\\,\\mathrm{m/s^2}$",
         ],
-        needsImage: true,
-        imageMethod: "draw",
-        imagePrompt:
-          "Cart m=2kg, horizontal force arrow to right F=4N; no acceleration/answer label",
-        imageCaption: "小车受力示意图",
+        figure,
       };
 
 for (const viewport of [
@@ -49,7 +78,7 @@ for (const viewport of [
   { width: 3080, height: 1240 },
   { width: 390, height: 844 },
 ]) {
-  test(`quiz composer publishes text before real engine figures, grades and preserves answers at ${viewport.width}`, async ({
+  test(`quiz composer starts all questions concurrently and renders same-response diagram JSON, grades and preserves answers at ${viewport.width}`, async ({
     page,
   }, info) => {
     await page.setViewportSize(viewport);
@@ -68,40 +97,18 @@ for (const viewport of [
       endpoint,
     );
     let releaseText!: () => void;
-    let releaseDrawings!: () => void;
     const textGate = new Promise<void>((resolve) => {
       releaseText = resolve;
     });
-    const drawingGate = new Promise<void>((resolve) => {
-      releaseDrawings = resolve;
-    });
-    let searched = false;
-    let verifiedPictures = 0;
+    let questionRequests = 0;
     await page.route(endpoint, async (route) => {
       const body = route.request().postDataJSON();
       const system = String(body.messages[0].content);
       let result: unknown;
       if (
-        system.startsWith("Research original quiz design using real web search")
-      ) {
-        searched =
-          body.web_search_options !== undefined ||
-          body.tools?.some(
-            (tool: { type: string; function?: { name: string } }) =>
-              tool.type === "web_search" ||
-              tool.function?.name === "web_search",
-          );
-        result = {
-          title: "牛顿定律课堂练习",
-          tasks: Array.from({ length: 10 }, (_, index) => ({
-            type: index % 2 ? "calculation" : "single",
-            focus: `独立牛顿定律任务${index + 1}`,
-          })),
-          sources,
-        };
-      } else if (
         system.startsWith("Generate ONE original independent quiz question")
       ) {
+        questionRequests++;
         const content = body.messages[1].content;
         const text =
           typeof content === "string"
@@ -113,34 +120,8 @@ for (const viewport of [
           await textGate;
         }
         result = question(index);
-      } else if (
-        system.startsWith("Create only the accurate textbook figure")
-      ) {
-        await drawingGate;
-        result = drawing();
       } else {
-        expect(system).toContain(
-          "Check an actual generated educational illustration",
-        );
-        const dataURL = body.messages[1].content.find(
-          (part: { type: string }) => part.type === "image_url",
-        ).image_url.url as string;
-        expect(dataURL).toMatch(/^data:image\/png;base64,/);
-        const png = Buffer.from(dataURL.split(",")[1], "base64");
-        expect([...png.subarray(0, 8)]).toEqual([
-          137, 80, 78, 71, 13, 10, 26, 10,
-        ]);
-        expect(png.readUInt32BE(16)).toBeGreaterThan(20);
-        expect(png.readUInt32BE(16)).toBeLessThanOrEqual(1440);
-        expect(png.readUInt32BE(20)).toBeLessThanOrEqual(920);
-        verifiedPictures++;
-        if (verifiedPictures === 1) {
-          await info.attach("actual-jsxgraph-figure", {
-            body: png,
-            contentType: "image/png",
-          });
-        }
-        result = { valid: true, issues: "" };
+        throw new Error(`Unexpected model request: ${system.slice(0, 100)}`);
       }
       await route.fulfill({
         json: {
@@ -163,12 +144,16 @@ for (const viewport of [
       );
       const panel = page.locator(".fc-quiz-panel");
       await expect(panel).toBeVisible();
-      const frame = page.frameLocator('iframe[title="牛顿定律课堂练习"]');
+      await expect(panel.locator("iframe")).toHaveAttribute(
+        "title",
+        /牛顿定律/,
+      );
+      const frame = page.frameLocator(".fc-quiz-panel iframe");
       await expect(frame.locator("article.card")).toHaveCount(10);
       await expect(
         frame.locator('article.card[data-ready="true"]'),
       ).toHaveCount(1);
-      expect(searched).toBe(true);
+      expect(questionRequests).toBe(10);
       const first = frame.locator("article.card").first();
       await first.locator("input").nth(1).check();
       await expect(first.locator(".verdict")).toHaveAttribute(
@@ -197,14 +182,10 @@ for (const viewport of [
         await frame.locator("#next").click();
       }
       await expect(frame.locator("#page")).toHaveText(`${index + 1} / 10`);
-      await expect(
-        calculation.locator(".quiz-image [role='status']"),
-      ).toBeVisible();
       await calculation.locator(".answer > summary").click();
       await expect(calculation.locator(".steps li")).toHaveCount(2);
-      releaseDrawings();
       await expect(frame.locator(".quiz-image img")).toHaveCount(5);
-      await expect.poll(() => verifiedPictures).toBe(5);
+      expect(questionRequests).toBe(10);
       await expect
         .poll(() =>
           calculation
@@ -212,6 +193,10 @@ for (const viewport of [
             .evaluate((node: HTMLImageElement) => node.naturalWidth),
         )
         .toBeGreaterThan(0);
+      await info.attach("actual-jsxgraph-figure", {
+        body: await calculation.locator(".quiz-image img").screenshot(),
+        contentType: "image/png",
+      });
       await expect(calculation.locator("h2 img.formula").first()).toBeVisible();
       await expect(calculation.locator(".problem")).toHaveCSS(
         "overflow-y",
@@ -241,7 +226,6 @@ for (const viewport of [
       });
     } finally {
       releaseText();
-      releaseDrawings();
     }
   });
 }
@@ -263,18 +247,38 @@ test("failed figures leave the question and answer usable and an image-only retr
       ),
     endpoint,
   );
-  let programs = 0;
+  await page.addInitScript(() => {
+    let failed = false;
+    window.addEventListener(
+      "message",
+      (event) => {
+        if (
+          !failed &&
+          event.data?.type === "quiz-graphic" &&
+          event.data.dataURL
+        ) {
+          failed = true;
+          event.stopImmediatePropagation();
+          window.dispatchEvent(
+            new MessageEvent("message", {
+              source: event.source,
+              data: {
+                ...event.data,
+                dataURL: undefined,
+                error: "fixture drawing failed",
+              },
+            }),
+          );
+        }
+      },
+      true,
+    );
+  });
   let questions = 0;
   await page.route(endpoint, async (route) => {
     const system = String(route.request().postDataJSON().messages[0].content);
     let result: unknown;
-    if (system.startsWith("Research original quiz design")) {
-      result = {
-        title: "独立题目与配图",
-        tasks: [{ type: "single", focus: "由图中m和F计算加速度" }],
-        sources,
-      };
-    } else if (system.startsWith("Generate ONE original")) {
+    if (system.startsWith("Generate ONE original")) {
       questions++;
       result = {
         ...question(1),
@@ -282,17 +286,8 @@ test("failed figures leave the question and answer usable and an image-only retr
         options: ["1 m/s²", "2 m/s²", "4 m/s²"],
         answer: ["B"],
       };
-    } else if (system.startsWith("Create only the accurate")) {
-      programs++;
-      result =
-        programs <= 2
-          ? drawing(
-              '<html><body><div data-fc-graphics style="width:600px;height:340px"></div><script>throw Error("fixture drawing failed")</script></body></html>',
-            )
-          : drawing();
     } else {
-      expect(system).toContain("Check an actual generated");
-      result = { valid: true, issues: "" };
+      throw new Error(`Unexpected model request: ${system.slice(0, 100)}`);
     }
     await route.fulfill({
       json: { choices: [{ message: { content: JSON.stringify(result) } }] },
@@ -300,7 +295,11 @@ test("failed figures leave the question and answer usable and an image-only retr
   });
   await page.goto("/");
   await submitQuiz(page, "使用 JSXGraph 出1道牛顿定律选择题。");
-  const frame = page.frameLocator('iframe[title="独立题目与配图"]');
+  await expect(page.locator(".fc-quiz-panel iframe")).toHaveAttribute(
+    "title",
+    /牛顿定律/,
+  );
+  const frame = page.frameLocator(".fc-quiz-panel iframe");
   const card = frame.locator(".card");
   await expect(card.locator("h2")).toContainText("小车质量");
   await card.locator("input").nth(1).check();
@@ -312,7 +311,7 @@ test("failed figures leave the question and answer usable and an image-only retr
   await expect(card.locator(".quiz-image [role='alert']")).toContainText(
     "fixture drawing failed",
   );
-  expect(programs).toBe(2);
+  expect(questions).toBe(1);
   await card.evaluate((node) => {
     (node as HTMLElement).dataset.fixtureCard = "retained";
   });
@@ -324,7 +323,7 @@ test("failed figures leave the question and answer usable and an image-only retr
         .evaluate((node: HTMLImageElement) => node.naturalWidth),
     )
     .toBeGreaterThan(0);
-  expect(programs).toBe(3);
+  expect(questions).toBe(1);
   expect(questions).toBe(1);
   await expect(card).toHaveAttribute("data-fixture-card", "retained");
   await expect(card.locator("input").nth(1)).toBeChecked();

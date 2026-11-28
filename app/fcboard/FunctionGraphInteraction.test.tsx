@@ -479,7 +479,7 @@ it("merges expressions only on request and labels the actual reciprocal/line int
       .querySelector("button,input,textarea,form,nav,output"),
   ).toBeNull();
   const { render } = await import("./test/render");
-  render(<SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />);
+  render(<SelectionActions api={api} />);
   expect(screen.getByRole("button", { name: t("labels.copy") })).toBeVisible();
   expect(
     screen.getByRole("button", { name: t("fcboard.selection_border") }),
@@ -500,7 +500,7 @@ it("keeps graph object actions available and offers merge for two selected graph
   const graphs = api.getSceneElements();
   act(() => api.updateScene({ appState: objectSelection(graphs) }));
   const { render } = await import("./test/render");
-  render(<SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />);
+  render(<SelectionActions api={api} />);
   expect(screen.getByRole("button", { name: t("labels.copy") })).toBeVisible();
   expect(
     screen.getByRole("button", { name: t("fcboard.selection_layers") }),
@@ -800,7 +800,7 @@ it("uses the ordinary border menu and preserves its actual curve style through r
   const regenerate = vi.spyOn(visualization, "functionGraphImage");
   const stop = registerCanvasCommands(api);
   const { render } = await import("./test/render");
-  render(<SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />);
+  render(<SelectionActions api={api} />);
   try {
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.selection_border") }),

@@ -61,11 +61,7 @@ beforeEach(async () => {
         {current && (
           <>
             <InsertMenu api={current} />
-            <SelectionActions
-              api={current}
-              onPlot={vi.fn()}
-              onRequest={vi.fn()}
-            />
+            <SelectionActions api={current} />
           </>
         )}
       </Fcboard>

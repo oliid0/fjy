@@ -109,7 +109,6 @@ import { ownedRequest } from "./ownedRequest";
 import { validatedPlot } from "./mathRecognition";
 import { Classroom as NativeClassroom } from "./native";
 import { createNarrator, isNarrationEcho } from "./narration";
-import { AUDIO_GENERATION_ENDPOINT } from "./studyAudio";
 import { startRealtimeSpeech } from "./realtimeSpeech";
 import { startDuplexSpeech } from "./duplexSpeech";
 
@@ -228,7 +227,7 @@ export const Classroom = ({
     useState<HTMLDivElement | null>(null);
   const [remember, setRemember] = useState(() => {
     const saved = loadSettings();
-    return !!(saved.apiKey || saved.speechKey || saved.ttsKey);
+    return !!(saved.apiKey || saved.speechKey);
   });
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState("");
@@ -272,10 +271,6 @@ export const Classroom = ({
   const agentSpeaker = useRef<((text: string) => Promise<void>) | null>(null);
   const duplexOpening = useRef<Promise<void> | null>(null);
   const duplexOpeningAbort = useRef<AbortController | null>(null);
-  const duplexTranscript = useRef<{
-    line: (line: TranscriptLine) => void;
-    interim: (line: TranscriptLine | null) => void;
-  } | null>(null);
   const voiceRelease = useRef<Promise<void> | undefined>(undefined);
   const voiceTurns = useRef<VoiceTurns | null>(null);
   const voiceExecute = useRef<
@@ -405,7 +400,7 @@ export const Classroom = ({
           continue;
         }
         spoken.set(task.id, task.speech.sequence);
-        if (duplexSpeech.current || !voiceTurns.current) {
+        if (!voiceTurns.current) {
           continue;
         }
         const text = task.speech.text;
@@ -704,6 +699,7 @@ export const Classroom = ({
       alive = false;
       invalidateVoice();
       duplexOpeningAbort.current?.abort();
+      void duplexSpeech.current?.cancel().catch(() => {});
       narrator.current?.stop();
       stopSpeech.current?.();
       void localSpeech.current?.cancel().catch(() => {});
@@ -1592,10 +1588,37 @@ Tools and controls depend on the current interface; open the relevant surface be
     [api, plot, summarize, solveMath, createPlot],
   );
 
+  const ensureVoiceOutput = async () => {
+    if (duplexSpeech.current) return duplexSpeech.current;
+    if (!Capacitor.isNativePlatform() || currentSettings().speech !== "cloud")
+      return;
+    if (!duplexOpening.current) {
+      const controller = new AbortController();
+      duplexOpeningAbort.current = controller;
+      const opening = startDuplexSpeech({
+        signal: controller.signal,
+        caption: setVoiceCaption,
+        state: setVoiceState,
+        error: setError,
+      })
+        .then(async (handle) => {
+          if (controller.signal.aborted) await handle.cancel();
+          else duplexSpeech.current = handle;
+        })
+        .finally(() => {
+          if (duplexOpening.current === opening) duplexOpening.current = null;
+        });
+      duplexOpening.current = opening;
+    }
+    await duplexOpening.current;
+    return duplexSpeech.current || undefined;
+  };
+
   const speakVoice = async (text: string, signal?: AbortSignal) => {
     signal?.throwIfAborted();
-    if (duplexSpeech.current) {
-      await duplexSpeech.current.speak(text);
+    const output = await ensureVoiceOutput();
+    if (output) {
+      await output.speak(text, signal);
       return;
     }
     setVoiceCaption(text);
@@ -1658,6 +1681,8 @@ Tools and controls depend on the current interface; open the relevant surface be
     setVoiceState("thinking");
     setVoiceCaption(text);
     const generation = assistantGeneration.current;
+    const output = ensureVoiceOutput().then((handle) => handle?.reply(signal));
+    void output.catch(() => {});
     const result = runVoiceAgent(
       text,
       voiceConversation.current,
@@ -1669,7 +1694,13 @@ Tools and controls depend on the current interface; open the relevant surface be
           activeVoice.current === signal &&
           generation === assistantGeneration.current
         ) {
-          setVoiceCaption(caption || text);
+          if (caption)
+            void output
+              .then((reply) => {
+                if (reply) reply.update(caption);
+                else setVoiceCaption(caption);
+              })
+              .catch((failure) => setError(errorMessage(failure)));
         }
       },
     );
@@ -1694,14 +1725,17 @@ Tools and controls depend on the current interface; open the relevant surface be
         !signal.aborted &&
         generation === assistantGeneration.current
       ) {
-        await speakVoice(reply, signal);
+        const speech = await output;
+        if (speech) await speech.finish(reply);
+        else await speakVoice(reply, signal);
       }
     } catch (failure) {
+      void output.then((speech) => speech?.cancel()).catch(() => {});
       throw failure;
     } finally {
       if (activeVoice.current === signal) {
         activeVoice.current = undefined;
-        setVoiceState("listening");
+        if (!duplexSpeech.current) setVoiceState("listening");
       }
       if (!signal.aborted && generation === assistantGeneration.current) {
         setStatus((previous) =>
@@ -1714,7 +1748,6 @@ Tools and controls depend on the current interface; open the relevant surface be
     const taskScope = new AbortController();
     const turns = createVoiceTurns(
       async (text, signal) => {
-        narrator.current?.stop();
         if (currentSettings().speech === "local") {
           await voiceExecute.current?.(text, signal, taskScope.signal);
           return;
@@ -1762,228 +1795,15 @@ Tools and controls depend on the current interface; open the relevant surface be
       },
     };
     voiceTurns.current = session;
+    void ensureVoiceOutput().catch((failure) =>
+      setError(errorMessage(failure)),
+    );
     setVoiceState("listening");
     setListening(true);
     return session;
   };
 
-  const openDuplexVoice = async (generation: number, stream?: MediaStream) => {
-    const opening = new AbortController();
-    duplexOpeningAbort.current = opening;
-    setListening(true);
-    setVoiceState("thinking");
-    setStatus("");
-    let lastBoardFrame: string | undefined;
-    let lastBoardCapture = -Infinity;
-    try {
-      const handle = await startDuplexSpeech({
-        stream,
-        visualFrame: Capacitor.isNativePlatform()
-          ? async (previousStamp, immediate) => {
-              const id = focusedDocument();
-              const name = `document.voice.frame.${id}`;
-              if (id) {
-                lastBoardFrame = undefined;
-                if (!classroomCommands.has(name)) {
-                  return;
-                }
-                const view = (await classroomCommands.execute({
-                  name,
-                  args: { previousStamp },
-                })) as { stamp: string; image: string } | undefined;
-                return focusedDocument() === id ? view : undefined;
-              }
-              const now = performance.now();
-              if (
-                !immediate &&
-                previousStamp?.startsWith("board:") &&
-                now - lastBoardCapture < 1100
-              ) {
-                return;
-              }
-              lastBoardCapture = now;
-              const { image } = await NativeClassroom.captureFrame();
-              if (
-                focusedDocument() ||
-                (previousStamp?.startsWith("board:") &&
-                  image === lastBoardFrame)
-              ) {
-                return;
-              }
-              lastBoardFrame = image;
-              return { stamp: `board:${now}`, image };
-            }
-          : undefined,
-        signal: opening.signal,
-        line: (line) => {
-          if (generation === voiceGeneration.current) {
-            duplexTranscript.current?.line(line);
-          }
-        },
-        interim: (line) => {
-          if (generation === voiceGeneration.current) {
-            duplexTranscript.current?.interim(line);
-          }
-        },
-        caption: (text) => {
-          if (generation === voiceGeneration.current) {
-            setVoiceCaption(text);
-          }
-        },
-        state: (value) => {
-          if (generation === voiceGeneration.current) {
-            setVoiceState(value);
-          }
-        },
-        status: (message) => {
-          if (generation === voiceGeneration.current) {
-            setVoiceJob(message);
-          }
-        },
-        error: (message) => {
-          if (generation !== voiceGeneration.current) {
-            return;
-          }
-          voiceGeneration.current++;
-          setError(message);
-          setListening(false);
-          recordingVoiceCommand.current = false;
-          duplexTranscript.current = null;
-          const failed = duplexSpeech.current;
-          duplexSpeech.current = null;
-          localSpeech.current = null;
-          if (recorder.current && failed && !recordUsesCloud.current) {
-            recordSpeechGeneration.current++;
-            recordSpeechRelease.current = failed.cancel();
-            void recordSpeechRelease.current
-              .then(() => {
-                if (recorder.current && !stoppingRecording.current) {
-                  return startRecordingSpeech(recorder.current);
-                }
-              })
-              .catch((failure) => setError(errorMessage(failure)));
-          }
-        },
-      });
-      if (generation !== voiceGeneration.current) {
-        await handle.cancel();
-        return;
-      }
-      duplexSpeech.current = handle;
-      localSpeech.current = handle;
-      setVoiceState("listening");
-      setStatus("");
-    } catch (failure) {
-      if (generation === voiceGeneration.current) {
-        setListening(false);
-        throw failure;
-      }
-    } finally {
-      if (duplexOpeningAbort.current === opening) {
-        duplexOpeningAbort.current = null;
-      }
-    }
-  };
-
   const toggleVoice = async (resumeExisting: unknown = false) => {
-    if (
-      (duplexSpeech.current || duplexOpening.current) &&
-      resumeExisting !== true
-    ) {
-      const session = duplexSpeech.current;
-      const opening = duplexOpening.current;
-      voiceGeneration.current++;
-      duplexOpeningAbort.current?.abort();
-      duplexSpeech.current = null;
-      localSpeech.current = null;
-      duplexTranscript.current = null;
-      recordingVoiceCommand.current = false;
-      if (recorder.current && recordUsesCloud.current) {
-        invalidateVoice();
-      }
-      setListening(false);
-      voiceRelease.current = (async () => {
-        await session?.cancel();
-        await opening;
-        if (
-          recorder.current &&
-          !stoppingRecording.current &&
-          !recordUsesCloud.current
-        ) {
-          await (recordSpeechTask.current = startRecordingSpeech(
-            recorder.current,
-          ));
-        }
-      })();
-      await voiceRelease.current;
-      return;
-    }
-    if (
-      currentSettings().assistantVoice === "duplex" &&
-      !duplexSpeech.current &&
-      !voiceTurns.current &&
-      !(recorder.current && recordUsesCloud.current)
-    ) {
-      if (duplexOpening.current) {
-        await duplexOpening.current;
-        return;
-      }
-      const generation = ++voiceGeneration.current;
-      const opening = (async () => {
-        await voiceRelease.current;
-        if (generation !== voiceGeneration.current) {
-          return;
-        }
-        narrator.current?.stop();
-        if (recorder.current && !recordUsesCloud.current) {
-          recordSpeechGeneration.current++;
-          await recordSpeechTask.current;
-          if (generation !== voiceGeneration.current) {
-            return;
-          }
-          stopSpeech.current?.();
-          stopSpeech.current = null;
-          const previous = localSpeech.current;
-          localSpeech.current = null;
-          await previous?.cancel();
-          if (generation !== voiceGeneration.current) {
-            return;
-          }
-          recordingVoiceCommand.current = true;
-        }
-        await openDuplexVoice(generation, recorder.current?.audioStream);
-        if (
-          generation === voiceGeneration.current &&
-          recorder.current &&
-          duplexSpeech.current &&
-          !recordUsesCloud.current
-        ) {
-          await (recordSpeechTask.current = startRecordingSpeech(
-            recorder.current,
-          ));
-        }
-      })();
-      duplexOpening.current = opening;
-      try {
-        await opening;
-        return;
-      } catch (failure) {
-        if (
-          generation !== voiceGeneration.current ||
-          recorder.current ||
-          currentSettings().speech !== "cloud" ||
-          !/HTTP (?:401|403)\b/.test(errorMessage(failure))
-        ) {
-          throw failure;
-        }
-        setError(errorMessage(failure));
-      } finally {
-        if (duplexOpening.current === opening) {
-          duplexOpening.current = null;
-        }
-      }
-    }
-
     if (voicePausedRef.current) {
       voicePausedRef.current = false;
       setVoicePaused(false);
@@ -2287,14 +2107,8 @@ Tools and controls depend on the current interface; open the relevant surface be
       return;
     }
     const cloudRecording = recordUsesCloud.current;
-    const duplex = duplexSpeech.current;
-    const duplexTranscriptSource = duplex && !cloudRecording;
-    const speechStartedAt = duplexTranscriptSource
-      ? duplex.startedAt
-      : Date.now();
-    const timelineOffset = duplexTranscriptSource
-      ? (speechStartedAt - recordStarted.current) / 1000
-      : recordElapsed();
+    const speechStartedAt = Date.now();
+    const timelineOffset = recordElapsed();
     const timelineLine = (line: TranscriptLine): TranscriptLine | null => {
       const wallTime = speechStartedAt + line.time * 1000;
       if (
@@ -2348,7 +2162,7 @@ Tools and controls depend on the current interface; open the relevant surface be
         const handle = cloudRecordingSpeech.current;
         cloudRecordingSpeech.current = null;
         recordSpeechRelease.current = handle?.cancel().catch(() => {});
-        if (!duplexSpeech.current && recordingVoiceCommand.current) {
+        if (recordingVoiceCommand.current) {
           recordingVoiceCommand.current = false;
           invalidateVoice();
           setListening(false);
@@ -2379,27 +2193,6 @@ Tools and controls depend on the current interface; open the relevant surface be
         ),
       );
     };
-    if (duplexTranscriptSource) {
-      duplexTranscript.current = {
-        line: (line) => {
-          if (speechGeneration !== recordSpeechGeneration.current) {
-            return;
-          }
-          const timed = timelineLine(line);
-          if (timed) {
-            transcript.current.push(timed);
-            refreshTranscript((version) => version + 1);
-          }
-          setInterimTranscript(null);
-        },
-        interim: (line) => {
-          if (speechGeneration === recordSpeechGeneration.current) {
-            setInterimTranscript(line ? timelineLine(line) : null);
-          }
-        },
-      };
-      return;
-    }
     if (cloudRecording || currentSettings().speech === "local") {
       let tap: MediaStream | undefined;
       const releaseTap = () =>
@@ -2532,25 +2325,19 @@ Tools and controls depend on the current interface; open the relevant surface be
     const cloudRecording = currentSettings().speech === "cloud";
     if (cloudRecording) {
       await voiceRelease.current;
-      await duplexOpening.current?.catch(recordingFailure);
       source?.throwIfAborted();
     }
     if (recorder.current) {
       throw new Error(t("fcboard.a_recording_is_running_or_being_saved"));
     }
     narrator.current?.stop();
-    let liveDuplex = duplexSpeech.current;
-    let duplexInput = liveDuplex?.stream;
     const handoff =
-      !duplexInput &&
       !!voiceTurns.current &&
       listening &&
       ["local", "cloud", "system"].includes(currentSettings().speech);
     if (
       listening &&
       !handoff &&
-      !duplexInput &&
-      !liveDuplex?.prepareRecording &&
       (localSpeech.current ||
         stopSpeech.current ||
         voiceRecorder.current?.state === "recording")
@@ -2576,60 +2363,18 @@ Tools and controls depend on the current interface; open the relevant surface be
     recorder.current = instance;
     setRecordPhase("starting");
     try {
-      if (cloudRecording && liveDuplex) {
-        try {
-          if (!liveDuplex.prepareRecording) {
-            throw new Error(t("fcboard.stop_voice_input_before_recording"));
-          }
-          await liveDuplex.prepareRecording();
-        } catch {
-          const interrupted = liveDuplex;
-          await interrupted.cancel();
-          if (duplexSpeech.current === interrupted) {
-            duplexSpeech.current = null;
-            localSpeech.current = null;
-            invalidateVoice();
-            setListening(false);
-          }
-          liveDuplex = null;
-        }
-      } else {
-        await liveDuplex?.prepareRecording?.();
-      }
       source?.throwIfAborted();
-      duplexInput = cloudRecording ? undefined : liveDuplex?.stream;
-      await instance.start(
-        selectedMode,
-        () => {
-          setRecording(false);
-          if (recorder.current === instance && !stoppingRecording.current) {
-            void stopRecording().catch((failure) =>
-              setError(errorMessage(failure)),
-            );
-          }
-        },
-        duplexInput,
-      );
-      if (
-        !cloudRecording &&
-        liveDuplex &&
-        duplexSpeech.current === liveDuplex &&
-        liveDuplex.useRecordingStream
-      ) {
-        await liveDuplex.useRecordingStream(instance.audioStream);
-      }
-      if (duplexInput || (liveDuplex && duplexSpeech.current === liveDuplex)) {
-        recordingVoiceCommand.current = true;
-        if (cloudRecording && !voiceTurns.current) {
-          beginVoiceTurns();
+      await instance.start(selectedMode, () => {
+        setRecording(false);
+        if (recorder.current === instance && !stoppingRecording.current) {
+          void stopRecording().catch((failure) =>
+            setError(errorMessage(failure)),
+          );
         }
-      }
+      });
       source?.throwIfAborted();
     } catch (failure) {
       instance.dispose();
-      await liveDuplex
-        ?.restoreCapture?.()
-        .catch((error) => console.error("[native-voice-recording]", error));
       recorder.current = null;
       setRecordPhase("idle");
       if (handoff) {
@@ -2667,12 +2412,9 @@ Tools and controls depend on the current interface; open the relevant surface be
     stoppingRecording.current = true;
     setRecordPhase("stopping");
     setPanel("record");
-    const keepDuplex = !!duplexSpeech.current;
     const resumeListening =
-      keepDuplex ||
-      (!!source && recordingVoiceCommand.current && !!voiceTurns.current);
+      !!source && recordingVoiceCommand.current && !!voiceTurns.current;
     const cloudRecording = recordUsesCloud.current;
-    const restoreCapture = () => duplexSpeech.current?.restoreCapture?.();
     try {
       recordingVoiceCommand.current = false;
       if (!resumeListening) {
@@ -2689,8 +2431,6 @@ Tools and controls depend on the current interface; open the relevant surface be
             const handle = cloudRecordingSpeech.current;
             cloudRecordingSpeech.current = null;
             await handle?.stop();
-          } else if (duplexSpeech.current) {
-            await duplexSpeech.current.flush();
           } else {
             await localSpeech.current?.stop();
           }
@@ -2702,10 +2442,7 @@ Tools and controls depend on the current interface; open the relevant surface be
             ),
           );
         }
-        if (!keepDuplex) {
-          localSpeech.current = null;
-        }
-        duplexTranscript.current = null;
+        localSpeech.current = null;
         recordSpeechGeneration.current++;
         setInterimTranscript(null);
         stopSpeech.current?.();
@@ -2714,7 +2451,6 @@ Tools and controls depend on the current interface; open the relevant surface be
       if (!cloudRecording) {
         await recordControlTask.current?.catch(recordingFailure);
         await finishTranscript();
-        await restoreCapture();
       }
       const result = await stopped;
       setRecording(false);
@@ -2761,11 +2497,6 @@ Tools and controls depend on the current interface; open the relevant surface be
             value.id === item.id ? item : value,
           ),
         );
-        if (keepDuplex) {
-          voiceTurns.current?.stop();
-          voiceTurns.current = null;
-        }
-        voiceRelease.current = restoreCapture()?.catch(recordingFailure);
       }
       recorder.current = null;
       if (currentSettings().speech === "custom") {
@@ -2813,7 +2544,6 @@ Tools and controls depend on the current interface; open the relevant surface be
         voiceRelease.current = (async () => {
           await handle?.cancel().catch(recordingFailure);
           await recordSpeechTask.current?.catch(recordingFailure);
-          await restoreCapture();
         })().catch(recordingFailure);
       }
       recorder.current?.dispose();
@@ -2825,12 +2555,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       recordSpeechPausedForCommands.current = false;
       setRecordingPaused(false);
       setRecordPhase("ready");
-      if (
-        resumeListening &&
-        !keepDuplex &&
-        !source?.aborted &&
-        voiceTurns.current
-      ) {
+      if (resumeListening && !source?.aborted && voiceTurns.current) {
         await toggleVoice(true);
       }
     }
@@ -3378,25 +3103,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       <InsertionCandidates />
       <MindMapControls api={api} inkProfile={inkProfile} />
       <LanguagePanel api={api} />
-      <SelectionActions
-        api={api}
-        onPlot={(value, signature) =>
-          createPlot(
-            value,
-            false,
-            signature,
-            false,
-            selectedBoardElements(api).map((element) => element.id),
-          )
-        }
-        onRequest={async (text, context, signal) => {
-          await execute(text, false, {
-            context,
-            signal,
-            sourceIds: context.elements.map((element) => element.id),
-          });
-        }}
-      />
+      <SelectionActions api={api} />
       <IntegratedSearch api={api} />
       <BoardSwitcher api={api} />
       <FunctionGraphInteraction api={api} />
@@ -3682,19 +3389,6 @@ Tools and controls depend on the current interface; open the relevant surface be
                     </label>
                   </SettingsSection>
                   <SettingsSection id="recognition">
-                    <label className="fc-check">
-                      <input
-                        type="checkbox"
-                        checked={settings.selectionImages}
-                        onChange={(event) =>
-                          setSettings({
-                            ...settings,
-                            selectionImages: event.target.checked,
-                          })
-                        }
-                      />
-                      {t("fcboard.attach_selection_image_to_ai")}
-                    </label>
                     <label>
                       {t("fcboard.handwriting_recognition")}
                       <MaterialSelect
@@ -3747,7 +3441,6 @@ Tools and controls depend on the current interface; open the relevant surface be
                         </MaterialSelect>
                       </label>
                     ))}
-                    <p>{t("fcboard.independent_local_providers_help")}</p>
                     {settings.ocr !== "local" && (
                       <label className="fc-settings-input">
                         {t("fcboard.ocr_model_id_blank_to_use_the_main_model")}
@@ -3796,33 +3489,6 @@ Tools and controls depend on the current interface; open the relevant surface be
                   </SettingsSection>
                   <SettingsSection id="voice">
                     <label>
-                      {t("fcboard.voice_assistant_mode")}
-                      <MaterialSelect
-                        aria-label={t("fcboard.voice_assistant_mode")}
-                        value={settings.assistantVoice}
-                        onChange={(event) =>
-                          setSettings({
-                            ...settings,
-                            assistantVoice: event.target
-                              .value as Settings["assistantVoice"],
-                          })
-                        }
-                      >
-                        <option value="agent">
-                          {t("fcboard.asr_agent_dialogue")}
-                        </option>
-                        <option
-                          value="duplex"
-                          disabled={!Capacitor.isNativePlatform()}
-                        >
-                          {t("fcboard.duplex_dialogue")}
-                        </option>
-                      </MaterialSelect>
-                    </label>
-                    {settings.assistantVoice === "duplex" && (
-                      <p>{t("fcboard.duplex_requires_activation")}</p>
-                    )}
-                    <label>
                       {t("fcboard.speech_service")}
                       <MaterialSelect
                         aria-label={t("fcboard.speech_service")}
@@ -3853,9 +3519,39 @@ Tools and controls depend on the current interface; open the relevant surface be
                         </option>
                       </MaterialSelect>
                     </label>
-                    {(settings.speech === "cloud" ||
-                      settings.assistantVoice === "duplex") && (
+                    {settings.speech === "cloud" && (
                       <>
+                        <label className="fc-settings-input">
+                          {t("fcboard.speech_voice")}
+                          <input
+                            value={settings.speechVoice}
+                            required
+                            onChange={(event) =>
+                              setSettings({
+                                ...settings,
+                                speechVoice: event.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="fc-settings-input">
+                          {t("fcboard.speech_speed")}
+                          <input
+                            type="number"
+                            min={-50}
+                            max={100}
+                            value={settings.speechSpeed}
+                            onChange={(event) =>
+                              setSettings({
+                                ...settings,
+                                speechSpeed: Math.max(
+                                  -50,
+                                  Math.min(100, Number(event.target.value)),
+                                ),
+                              })
+                            }
+                          />
+                        </label>
                         <label className="fc-settings-input">
                           {t("fcboard.speech_api_key")}
                           <input
@@ -3897,19 +3593,7 @@ Tools and controls depend on the current interface; open the relevant surface be
                             </option>
                           </MaterialSelect>
                         </label>
-                        <p>
-                          {t(
-                            "fcboard.use_an_api_key_from_the_doubao_speech_console_separate_from_the_ark_model_key_listening",
-                          )}
-                        </p>
                       </>
-                    )}
-                    {settings.speech === "local" && (
-                      <p>
-                        {t(
-                          "fcboard.the_chinese_model_is_bundled_with_android_recognition_runs_locally_and_shares_the_recording",
-                        )}
-                      </p>
                     )}
                     {settings.speech === "custom" && (
                       <>
@@ -3954,61 +3638,8 @@ Tools and controls depend on the current interface; open the relevant surface be
                             }
                           />
                         </label>
-                        <p>
-                          {t(
-                            "fcboard.the_endpoint_must_accept_multipart_audio_and_return_text_or_segments_start_text_browser_access",
-                          )}
-                        </p>
                       </>
                     )}
-                    <section aria-label={t("fcboard.spoken_playback_optional")}>
-                      <h3>{t("fcboard.spoken_playback_optional")}</h3>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSettings({
-                            ...settings,
-                            ttsEndpoint: AUDIO_GENERATION_ENDPOINT,
-                          })
-                        }
-                      >
-                        {t("fcboard.doubao_audio_generation")}
-                      </button>
-                      <p>{t("fcboard.study_audio_generation_help")}</p>
-                      <label className="fc-settings-input">
-                        {t("fcboard.custom_speech_endpoint_optional")}
-                        <input
-                          type="url"
-                          value={settings.ttsEndpoint}
-                          placeholder="http://192.168.1.10:8766/v1/audio/speech"
-                          onChange={(event) =>
-                            setSettings({
-                              ...settings,
-                              ttsEndpoint: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      <label className="fc-settings-input">
-                        {t("fcboard.speech_playback_key")}
-                        <input
-                          type="password"
-                          autoComplete="off"
-                          value={settings.ttsKey}
-                          onChange={(event) =>
-                            setSettings({
-                              ...settings,
-                              ttsKey: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      <p>
-                        {t(
-                          "fcboard.on_android_leave_empty_for_bundled_offline_chinese_english_narration_browsers_use_system_voices",
-                        )}
-                      </p>
-                    </section>
                   </SettingsSection>
                   <SettingsSection id="models">
                     <label className="fc-check">
@@ -4040,7 +3671,7 @@ Tools and controls depend on the current interface; open the relevant surface be
                       {t("fcboard.summarize_the_transcript_after_recording")}
                     </label>
                   </SettingsSection>
-                  <SettingsSection id="recognition">
+                  <SettingsSection id="models">
                     <label>
                       {t("fcboard.board_answer_style")}
                       <MaterialSelect

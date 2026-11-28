@@ -1,125 +1,28 @@
 package com.fcjy.fcboard;
 
-import android.Manifest;
-import android.content.Context;
-import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
-import android.media.AudioRecord;
 import android.media.AudioTrack;
-import android.media.MediaRecorder;
-import android.media.audiofx.AcousticEchoCanceler;
-import android.media.audiofx.NoiseSuppressor;
-import android.os.Process;
 import android.util.Log;
 import java.io.IOException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-/** Real microphone and speaker stay native even while WebView/model tools are busy. */
+/** Output-only native PCM speaker, independent of ASR and recording microphone ownership. */
 final class NativeVoiceAudio implements AutoCloseable {
-    private final Context context;
-    private final Consumer<byte[]> input;
-    private final Consumer<String> inputFailure;
     private final Consumer<Boolean> speaking;
     private final ScheduledThreadPoolExecutor output = new ScheduledThreadPoolExecutor(1);
     private final AtomicLong queuedBytes = new AtomicLong();
     private volatile boolean closed;
     private volatile long playbackEpoch;
-    private volatile AudioRecord recorder;
     private volatile AudioTrack speaker;
-    private AcousticEchoCanceler echo;
-    private NoiseSuppressor noise;
-    private Thread capture;
     private long writtenFrames;
     private Byte carry;
 
-    NativeVoiceAudio(Context context, Consumer<byte[]> input, Consumer<String> inputFailure, Consumer<Boolean> speaking) {
-        this.context = context.getApplicationContext();
-        this.input = input; this.inputFailure = inputFailure; this.speaking = speaking;
-    }
-
-    void startCapture() throws Exception {
-        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            throw new SecurityException("Microphone permission denied");
-        }
-        Exception failure = null;
-        for (int rate : new int[]{16000, 48000, 44100}) {
-            if (closed) throw new IOException("Native capture cancelled");
-            int minimum = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-            if (minimum <= 0) continue;
-            for (int source : new int[]{MediaRecorder.AudioSource.VOICE_COMMUNICATION, MediaRecorder.AudioSource.MIC}) {
-                AudioRecord candidate = null;
-                try {
-                    candidate = new AudioRecord.Builder().setAudioSource(source)
-                        .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())
-                        .setBufferSizeInBytes(Math.max(minimum * 2, rate / 5)).build();
-                    if (candidate.getState() != AudioRecord.STATE_INITIALIZED) throw new IOException("Microphone initialization failed");
-                    candidate.startRecording();
-                    if (candidate.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) throw new IOException("Microphone did not start");
-                    synchronized (this) {
-                        if (closed) throw new IOException("Native capture cancelled");
-                        recorder = candidate;
-                    }
-                } catch (Exception error) {
-                    failure = error;
-                    if (candidate != null) candidate.release();
-                    if (closed) throw new IOException("Native capture cancelled", error);
-                    continue;
-                }
-                try { startReader(rate); return; }
-                catch (Exception error) { stopCapture(); throw error; }
-            }
-        }
-        close();
-        throw new IOException("Native microphone unavailable", failure);
-    }
-
-    private void startReader(int rate) throws Exception {
-        AudioRecord source;
-        CountDownLatch first = new CountDownLatch(1);
-        String[] captureError = {null};
-        synchronized (this) {
-            source = recorder;
-            if (closed || source == null) throw new IOException("Native capture cancelled");
-            if (AcousticEchoCanceler.isAvailable()) {
-                try { echo = AcousticEchoCanceler.create(source.getAudioSessionId()); if (echo != null) echo.setEnabled(true); }
-                catch (RuntimeException error) { Log.w("FcboardVoice", "Echo cancellation unavailable", error); }
-            }
-            if (NoiseSuppressor.isAvailable()) {
-                try { noise = NoiseSuppressor.create(source.getAudioSessionId()); if (noise != null) noise.setEnabled(true); }
-                catch (RuntimeException error) { Log.w("FcboardVoice", "Noise suppression unavailable", error); }
-            }
-            NativePcmFramer frames = new NativePcmFramer(rate, (frame) -> {
-                first.countDown();
-                if (!closed) input.accept(frame);
-            });
-            capture = new Thread(() -> {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
-                short[] samples = new short[rate / 50];
-                try {
-                    while (!closed && recorder == source) {
-                        int count = source.read(samples, 0, samples.length, AudioRecord.READ_BLOCKING);
-                        if (count < 0) throw new IOException("Microphone read failed: " + count);
-                        if (count > 0) frames.accept(samples, count);
-                        else Thread.sleep(10);
-                    }
-                } catch (Exception failure) {
-                    captureError[0] = failure.getMessage();
-                    if (!closed && recorder == source) inputFailure.accept("Native microphone: " + captureError[0]);
-                } finally { first.countDown(); }
-            }, "FcboardMicrophone");
-            capture.start();
-        }
-        if (!first.await(8, TimeUnit.SECONDS) || captureError[0] != null || closed || recorder != source) {
-            throw new IOException(captureError[0] == null ? "Microphone produced no PCM" : captureError[0]);
-        }
-    }
+    NativeVoiceAudio(Consumer<Boolean> speaking) { this.speaking = speaking; }
 
     void play(byte[] pcm) {
         if (closed || pcm.length == 0) return;
@@ -201,25 +104,9 @@ final class NativeVoiceAudio implements AutoCloseable {
         }
     }
 
-    void stopCapture() {
-        AudioRecord source;
-        synchronized (this) { source = recorder; recorder = null; }
-        if (source != null) {
-            try { source.stop(); } catch (IllegalStateException ignored) {}
-        }
-        if (capture != null && capture != Thread.currentThread()) {
-            try { capture.join(1000); } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
-        }
-        if (echo != null) { echo.release(); echo = null; }
-        if (noise != null) { noise.release(); noise = null; }
-        if (source != null) source.release();
-        capture = null;
-    }
-
     @Override public synchronized void close() {
         if (closed) return;
         closed = true; playbackEpoch++;
-        stopCapture();
         AudioTrack track = speaker; speaker = null;
         if (track != null) {
             try { track.pause(); track.flush(); } catch (IllegalStateException ignored) {}

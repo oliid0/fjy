@@ -249,14 +249,6 @@ test("continuous voice answers concepts and delegates real math, board writing a
           }
         : { action: "text", text: "等式两边同时减去相同的数，等式仍然成立。" };
     } else if (
-      system.startsWith("Research original quiz design using real web search")
-    ) {
-      result = {
-        title: "一元一次方程练习",
-        tasks: [{ type: "single", focus: "求解x+1=3" }],
-        sources: [{ title: "教育部", url: "https://www.moe.gov.cn/" }],
-      };
-    } else if (
       system.startsWith("Generate ONE original independent quiz question")
     ) {
       result = {
@@ -345,7 +337,11 @@ test("continuous voice answers concepts and delegates real math, board writing a
     )
     .toBe(0);
   await say(page, "用白板演示这个方程并出一道题");
-  const quiz = page.frameLocator('iframe[title="一元一次方程练习"]');
+  await expect(page.locator(".fc-quiz-panel iframe")).toHaveAttribute(
+    "title",
+    /x\+1=3/,
+  );
+  const quiz = page.frameLocator(".fc-quiz-panel iframe");
   await expect(quiz.locator("h2")).toContainText("x+1=3");
   await quiz.locator("input").nth(0).check();
   await expect(quiz.locator(".verdict")).toHaveAttribute(

@@ -365,7 +365,7 @@ it("opens a language card through the selection tool without drawing a language-
   const view = render(
     <>
       <LanguagePanel api={host.api} />
-      <SelectionActions api={host.api} onPlot={vi.fn()} onRequest={vi.fn()} />
+      <SelectionActions api={host.api} />
     </>,
   );
   try {
@@ -540,7 +540,7 @@ it("crops different circled words inside the same sentence object and caches eac
   const view = render(
     <>
       <LanguagePanel api={host.api} />
-      <SelectionActions api={host.api} onPlot={vi.fn()} onRequest={vi.fn()} />
+      <SelectionActions api={host.api} />
     </>,
   );
   const select = async (left: number, right: number) => {
@@ -631,7 +631,7 @@ it("immediately aborts an old crop when the same source is circled elsewhere and
   const view = render(
     <>
       <LanguagePanel api={host.api} />
-      <SelectionActions api={host.api} onPlot={vi.fn()} onRequest={vi.fn()} />
+      <SelectionActions api={host.api} />
     </>,
   );
   const select = (left: number) =>

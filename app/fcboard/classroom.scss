@@ -3380,76 +3380,38 @@
       height: calc(18 * var(--fc-unit));
       color: #555;
     }
-    .fc-pen-page {
+    .fc-pen-types {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 4px;
-      margin-top: 8px;
-      touch-action: pan-y;
-      user-select: none;
-
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      min-height: calc(84 * var(--fc-unit));
+      margin: 0;
+      gap: calc(4 * var(--fc-unit));
       button {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 4px;
-        min-width: 0;
-        border: 1px solid transparent;
-        border-radius: 10px;
-        padding: 4px 2px;
+        justify-content: center;
+        gap: 0;
+        min-height: 0;
+        height: calc(38 * var(--fc-unit));
+        padding: calc(3 * var(--fc-unit)) 0;
+        color: #555;
         background: transparent;
-        color: #242935;
-        font: 600 clamp(14px, calc(15 * var(--fc-unit)), 21px) / 1.2 system-ui,
-          sans-serif;
-        overflow-wrap: anywhere;
-        cursor: pointer;
-        > span:last-child {
-          min-height: 2.4em;
+        border-radius: calc(5 * var(--fc-unit));
+        img {
+          width: calc(15 * var(--fc-unit));
+          height: calc(15 * var(--fc-unit));
+        }
+        span {
+          font: 400 calc(6 * var(--fc-unit)) / calc(11 * var(--fc-unit))
+            system-ui;
         }
         &[aria-pressed="true"] {
-          border-color: #0368ff;
-          background: #edf5ff;
+          color: white;
+          background: var(--fc-blue);
         }
-      }
-
-      .fc-pen-icon {
-        display: grid;
-        place-items: center;
-        width: clamp(42px, calc(52 * var(--fc-unit)), 68px);
-        max-width: 100%;
-        aspect-ratio: 1;
-        border-radius: 10px;
-        background: #f2f4f8;
-
-        svg {
-          width: 70%;
-          height: 70%;
-        }
-      }
-    }
-
-    .fc-pen-page-dots {
-      display: flex;
-      justify-content: center;
-      button {
-        display: grid;
-        place-items: center;
-        width: 36px;
-        height: 32px;
-        padding: 0;
-        border: 0;
-        border-radius: 8px;
-        background: transparent;
-        cursor: pointer;
-        &::before {
-          content: "";
-          width: 9px;
-          height: 9px;
-          border-radius: 50%;
-          background: #939bad;
-        }
-        &[aria-pressed="true"]::before {
-          background: #0368ff;
+        &:active {
+          opacity: 0.3;
         }
       }
     }

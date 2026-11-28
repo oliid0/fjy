@@ -166,12 +166,11 @@ export const registerBoardAgents = () => {
     const revision = classroomCommands.revision;
     const current = () => classroomCommands.isCurrent(revision, signal);
     const useVision = configured.speech !== "local" && !!configured.apiKey;
-    const capture = !task.sourceIds?.length || configured.selectionImages;
     const snapshot: Command = {
       name: "canvas.snapshot",
       args: {
         sourceIds: task.sourceIds,
-        capture,
+        capture: true,
         screen: useVision && !task.sourceIds?.length,
       },
     };
@@ -180,15 +179,10 @@ export const registerBoardAgents = () => {
       : classroomCommands.has(snapshot.name)
       ? ((await executeBoardCommand(snapshot, signal)) as BoardView)
       : undefined;
-    const observeAfterTools =
-      useVision && capture
-        ? boardObservationAfterTools(visible, signal, current)
-        : undefined;
-    if (
-      useVision &&
-      capture &&
-      (visible?.image || configured.speech === "cloud")
-    ) {
+    const observeAfterTools = useVision
+      ? boardObservationAfterTools(visible, signal, current)
+      : undefined;
+    if (useVision && (visible?.image || configured.speech === "cloud")) {
       settings.model =
         configured.ocrModel ||
         (endpoint &&

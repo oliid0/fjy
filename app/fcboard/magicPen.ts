@@ -7,25 +7,19 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 import { recognizeEmojiInk } from "./digitalInk";
-import { selectionImagePrompt } from "./selectionImagePrompt";
-import { generateImage, insertImageResult } from "./imageGeneration";
 import { insertElements } from "./board";
 import { selectionSignature } from "./selection";
-import { currentSettings } from "./settings";
 
-import type { GeneratedImage, ImagePlacement } from "./imageGeneration";
+import type { ImagePlacement } from "./imageGeneration";
 import type { InkInput } from "./digitalInk";
 import type { ContentRect } from "./placement";
 
-export type MagicChoice =
-  | { kind: "emoji"; text: string }
-  | { kind: "image"; image: GeneratedImage };
+export type MagicChoice = { kind: "emoji"; text: string };
 export type MagicCandidateInput = {
   candidates: readonly string[];
   loadCandidates?: (signal: AbortSignal) => Promise<readonly string[]>;
   bounds: ContentRect;
   signal: AbortSignal;
-  generate: (signal: AbortSignal) => Promise<GeneratedImage>;
 };
 
 /** draw/mode/d.U consumes every real EMOJI candidate, excluding U+1F595. */
@@ -52,11 +46,9 @@ export const chooseMagicCandidate = (input: MagicCandidateInput) => {
   }) as Promise<MagicChoice>;
 };
 
-/** Open immediately. Optional emoji recognition is independent; the first cell
- * sends its screenshot straight to the image API and cannot alter source ink. */
+/** Recognize real emoji candidates; no image generation is started. */
 export const insertMagicInk = async (
   api: FcboardImperativeAPI,
-  capture: () => Promise<string>,
   strokes: InkInput,
   signal: AbortSignal,
   placement: ImagePlacement & {
@@ -82,8 +74,6 @@ export const insertMagicInk = async (
     top: (bounds.top + state.scrollY) * zoom + (state.offsetTop || 0),
     bottom: (bounds.bottom + state.scrollY) * zoom + (state.offsetTop || 0),
   };
-  let referenceImage: string | undefined;
-  let snapshot: Promise<string> | undefined;
   const choice = await chooseMagicCandidate({
     candidates,
     loadCandidates: async (candidateSignal) => {
@@ -94,27 +84,6 @@ export const insertMagicInk = async (
     },
     bounds: clientBounds,
     signal,
-    generate: async (request) => {
-      const settings = currentSettings();
-      if (!settings.apiKey.trim()) {
-        throw new Error(
-          t(
-            "fcboard.set_an_api_key_and_a_vision_model_or_endpoint_id_in_ai_settings",
-          ),
-        );
-      }
-      referenceImage = await (snapshot ||= capture());
-      request.throwIfAborted();
-      if (!referenceImage.startsWith("data:image/")) {
-        throw new Error(
-          t("fcboard.no_content_recognized_select_the_area_again"),
-        );
-      }
-      return generateImage(selectionImagePrompt("magic"), request, {
-        referenceImage,
-        transparent: true,
-      });
-    },
   });
   signal.throwIfAborted();
   if (
@@ -123,13 +92,6 @@ export const insertMagicInk = async (
     onDocument !== classroomCommands.has("document.draw")
   ) {
     throw new DOMException("Magic ink changed", "AbortError");
-  }
-  if (choice.kind === "image") {
-    await insertImageResult(api, choice.image, signal, {
-      ...placement,
-      referenceImage,
-    });
-    return;
   }
   if (!candidates.includes(choice.text)) {
     throw new Error("Invalid emoji choice");

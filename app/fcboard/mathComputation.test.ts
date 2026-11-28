@@ -19,6 +19,21 @@ const worker = () => {
   return { instance, create };
 };
 
+it.each([
+  ["23+4+4=", "31"],
+  ["1+1+1+1+1=", "5"],
+  ["2+3*4-8/2=", "10"],
+  ["(23+4+4)/2=", "15.5"],
+  [`${Array(30).fill("1").join("+")}=`, "30"],
+])(
+  "computes the complete arithmetic chain %s without a worker",
+  async (input, answer) => {
+    const { create } = worker();
+    await expect(calculateAsync(input)).resolves.toBe(answer);
+    expect(create).not.toHaveBeenCalled();
+  },
+);
+
 it("keeps bounded numerical arithmetic local and runs symbolic work in a module worker", async () => {
   const { instance, create } = worker();
   expect(await calculateAsync("0.1+0.2")).toBe("0.3");

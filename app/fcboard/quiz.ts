@@ -4,8 +4,10 @@ import { getLanguage, t } from "@fcboard/fcboard/i18n";
 import { chat, parseJSON, visualMessage } from "./ai";
 import { currentSettings } from "./settings";
 import { quizText, quizDiagram } from "./quizContent";
-import { generateQuizImage, quizRequest } from "./quizRequests";
-import { teachingResourceEngines } from "./teachingResourcePrompt";
+import { generateQuizImage } from "./quizRequests";
+import { validateQuizFigure } from "./quizFigure";
+
+import type { QuizFigure } from "./quizFigure";
 
 import type { QuizDiagram } from "./quizContent";
 
@@ -22,9 +24,8 @@ export const quizTypes = [
 export type QuizQuestion = {
   id?: string;
   image?: {
-    method: "generate" | "draw";
-    engines?: ReturnType<typeof teachingResourceEngines>;
-    prompt: string;
+    method: "draw";
+    spec: QuizFigure;
     caption: string;
     status: "pending" | "ready" | "error";
     dataURL?: string;
@@ -34,7 +35,7 @@ export type QuizQuestion = {
   question: string;
   options?: string[];
   answer: string[];
-  explanation: string;
+  explanation?: string;
   steps?: string[];
   diagram?: QuizDiagram;
   solutionDiagram?: QuizDiagram;
@@ -74,7 +75,7 @@ export const validateQuiz = (input: unknown, count?: number): Quiz => {
       !Array.isArray(q.answer) ||
       !q.answer.length ||
       !q.answer.every((answer) => nonempty(answer)) ||
-      !nonempty(q.explanation) ||
+      (q.explanation !== undefined && typeof q.explanation !== "string") ||
       (q.steps !== undefined &&
         (!Array.isArray(q.steps) || !q.steps.every((step) => nonempty(step))))
     ) {
@@ -85,7 +86,7 @@ export const validateQuiz = (input: unknown, count?: number): Quiz => {
       q.question,
       ...(q.options || []),
       ...q.answer,
-      q.explanation,
+      q.explanation || "",
       ...(q.steps || []),
     ].forEach(quizText);
     if (q.diagram) {
@@ -151,7 +152,6 @@ export const generateQuiz = async (
   onProgress?: (quiz: Quiz) => void,
 ): Promise<Quiz> => {
   const settings = currentSettings();
-  const engines = teachingResourceEngines(prompt);
   const requested = quizNumbers.patterns
     .map((pattern) => prompt.match(new RegExp(pattern, "i"))?.[1])
     .find((value) => value !== undefined);
@@ -217,147 +217,131 @@ export const generateQuiz = async (
   const illustrations: Promise<void>[] = [];
   await Promise.all(
     plan.tasks.map((task, index) =>
-      quizRequest(signal, async () => {
-        const messages: import("./ai").Message[] = [
-          {
-            role: "system",
-            content: `Generate ONE original independent quiz question from the assigned plan, in interface language ${
-              getLanguage().code
-            }. Return ONLY JSON {"type":"${
-              task.type || quizTypes.join("|")
-            }","question":"complete plain text with inline $...$ or block $$...$$ LaTeX","options":["option without letter prefix"],"answer":["answer"],"explanation":"specific verified explanation","steps":["worked step"],"needsImage":false,"imageMethod":"generate|draw when needsImage is true","imagePrompt":"required precise illustration specification when needsImage is true","imageCaption":"accurate caption"}. JSON LaTeX backslashes must be escaped. Single-choice has exactly one A-H answer, multiple-choice at least two; options 2..8. True-false answer is ["true"] or ["false"]. Fill uses ____ and ordered blank answers. Other types omit options. Independently calculate and check all answers, steps, units and assumptions. The question must be self-contained and distinct from other task briefs. ${
-              task.type
-                ? `Every question must use type "${task.type}".`
-                : "Choose the question type to match the complete request."
-            } If the question refers to a picture, graph, objects, circuit or geometric/force diagram, needsImage MUST be true and imagePrompt must specify ALL required counts, topology, labels, values, units and directions, without the answer. Choose imageMethod freely: generate uses the image API; draw uses actual SVG/canvas programming with optional independent or combined Vega/Vega-Lite and JSXGraph engines. No subject is forced to an engine. Respect explicit drawing/engine choices and exclusions; use draw when an engine is required. A separate task creates the actual image. Use a concise explanation. Do not search or run an additional review. Return only its specification here, not SVG/HTML/URLs. Never depend on an unspecified or missing figure.`,
-          },
-          visualMessage(
-            JSON.stringify({
-              requirement: prompt,
-              context,
-              engines,
-              sources: plan.sources,
-              task: index + 1,
-              brief: task,
-              otherBriefs: plan.tasks.map((other) => other.focus),
-            }),
-            image,
-          ),
-        ];
-        const response = await chat(messages, signal, modelSettings, {
-          maxTokens: 3000,
-          useVisionModel: true,
-          quickVision: true,
-        });
-        signal.throwIfAborted();
-        const candidate = parseJSON(response) as QuizQuestion & {
-          needsImage?: unknown;
-          imagePrompt?: unknown;
-          imageCaption?: unknown;
-          imageMethod?: unknown;
-        };
-        const question = validateQuiz(
-          {
-            title: plan.title,
-            sources: plan.sources,
-            questions: [candidate],
-          },
-          1,
-        ).questions[0];
-        if (task.type && question.type !== task.type) {
-          throw new Error(
-            t("fcboard.quizForm.typeMismatch", {
-              type: t(`fcboard.aiMessages.quizType_${task.type}`),
-            }),
-          );
-        }
-        if (
-          typeof candidate.needsImage !== "boolean" ||
-          (!candidate.needsImage &&
-            /如图|图中|图示|下图|shown in|in the (?:figure|diagram|picture)|following (?:figure|diagram|picture)/i.test(
-              question.question,
-            )) ||
-          (candidate.needsImage &&
-            (!nonempty(candidate.imagePrompt, 6000) ||
-              !nonempty(candidate.imageCaption, 500) ||
-              !["generate", "draw"].includes(String(candidate.imageMethod)) ||
-              ((engines.required.length || engines.anyOf?.length) &&
-                candidate.imageMethod !== "draw")))
-        ) {
-          throw new Error(t("fcboard.quizForm.imageSpecification"));
-        }
-        if (
-          value.questions.some(
-            (existing) => existing.question.trim() === question.question.trim(),
-          )
-        ) {
-          throw new Error(t("fcboard.aiMessages.quizIncomplete"));
-        }
-        const ready: QuizQuestion = {
-          type: question.type,
-          question: question.question,
-          options: question.options,
-          answer: question.answer,
-          explanation: question.explanation,
-          steps: question.steps,
-          id: crypto.randomUUID(),
-          ...(candidate.needsImage
-            ? {
-                image: {
-                  method: candidate.imageMethod as "generate" | "draw",
-                  engines,
-                  prompt: candidate.imagePrompt as string,
-                  caption: candidate.imageCaption as string,
-                  status: "pending" as const,
-                },
-              }
-            : {}),
-        };
-        value = { ...value, questions: [...value.questions, ready] };
-        publish();
-        if (ready.image) {
-          illustrations.push(
-            generateQuizImage(ready, signal).then(
-              (dataURL) => {
-                update({
-                  ...ready,
-                  image: { ...ready.image!, status: "ready", dataURL },
-                });
-              },
-              (failure) => {
-                if (signal.aborted) {
-                  return;
-                }
-                update({
-                  ...ready,
-                  image: {
-                    ...ready.image!,
-                    status: "error",
-                    error:
-                      failure instanceof Error
-                        ? failure.message
-                        : String(failure),
-                  },
-                });
-              },
+      Promise.resolve()
+        .then(async () => {
+          const messages: import("./ai").Message[] = [
+            {
+              role: "system",
+              content: `Generate ONE original independent quiz question in interface language ${
+                getLanguage().code
+              }. The app renders fixed HTML cards; return compact JSON only: {"type":"${
+                task.type || quizTypes.join("|")
+              }","question":"complete question","options":["choice without letter"],"answer":["answer"]}. Options are only for choice questions. Single has one A-H answer, multiple at least two; true_false uses ["true"] or ["false"]. Fill uses ____ and ordered answers. Other types need question and answer only; explanation and steps are optional. Use escaped LaTeX where useful. Follow ALL text in the supplied screenshot as the user's quiz requirements and use its diagrams as source evidence. A necessary scientific/mathematical diagram MUST be returned in this SAME JSON as "figure": {"caption":"...","mode":"vega|vega-lite","spec":{inline Vega specification}} or {"caption":"...","mode":"jsxgraph","boundingbox":[-5,5,5,-5],"axis":false,"elements":[{"id":"A","type":"point","parents":[0,0],"attributes":{"name":"A"}}]}. JSXGraph supports point,line,segment,arrow,polygon,circle,angle,curve,text; use earlier element IDs as parents, numeric coordinate arrays for curves; no JavaScript/functions. Use only inline data and meaningful labels, units and geometry. Figure data must exactly match the question without revealing its answer. NEVER request generated images, photographs, pictorial counting questions such as counting apples, HTML, image URLs or a separate drawing task. Prefer self-contained text questions when no schematic is needed. Do not search, review, or call another model. ${
+                task.type
+                  ? `Use type ${task.type}.`
+                  : "Choose the appropriate type."
+              }`,
+            },
+            visualMessage(
+              JSON.stringify({
+                requirement: prompt,
+                context,
+                sources: plan.sources,
+                task: index + 1,
+                brief: task,
+                otherBriefs: plan.tasks.map((other) => other.focus),
+              }),
+              image,
             ),
-          );
-        }
-      }).catch((failure) => {
-        signal.throwIfAborted();
-        value = {
-          ...value,
-          errors: [
-            ...value.errors!,
-            t("fcboard.quizForm.questionFailed", {
-              number: index + 1,
-              message:
-                failure instanceof Error ? failure.message : String(failure),
-            }),
-          ],
-        };
-        publish();
-      }),
+          ];
+          const response = await chat(messages, signal, modelSettings, {
+            maxTokens: 3000,
+            useVisionModel: true,
+            quickVision: true,
+          });
+          signal.throwIfAborted();
+          const candidate = parseJSON(response) as QuizQuestion & {
+            figure?: QuizFigure & { caption?: string };
+          };
+          const question = validateQuiz(
+            {
+              title: plan.title,
+              sources: plan.sources,
+              questions: [candidate],
+            },
+            1,
+          ).questions[0];
+          if (task.type && question.type !== task.type) {
+            throw new Error(
+              t("fcboard.quizForm.typeMismatch", {
+                type: t(`fcboard.aiMessages.quizType_${task.type}`),
+              }),
+            );
+          }
+          if (candidate.figure) validateQuizFigure(candidate.figure);
+          if (
+            value.questions.some(
+              (existing) =>
+                existing.question.trim() === question.question.trim(),
+            )
+          ) {
+            throw new Error(t("fcboard.aiMessages.quizIncomplete"));
+          }
+          const ready: QuizQuestion = {
+            type: question.type,
+            question: question.question,
+            options: question.options,
+            answer: question.answer,
+            explanation: question.explanation,
+            steps: question.steps,
+            id: crypto.randomUUID(),
+            ...(candidate.figure
+              ? {
+                  image: {
+                    method: "draw" as const,
+                    spec: candidate.figure,
+                    caption: candidate.figure.caption || "",
+                    status: "pending" as const,
+                  },
+                }
+              : {}),
+          };
+          value = { ...value, questions: [...value.questions, ready] };
+          publish();
+          if (ready.image) {
+            illustrations.push(
+              generateQuizImage(ready, signal).then(
+                (dataURL) => {
+                  update({
+                    ...ready,
+                    image: { ...ready.image!, status: "ready", dataURL },
+                  });
+                },
+                (failure) => {
+                  if (signal.aborted) {
+                    return;
+                  }
+                  update({
+                    ...ready,
+                    image: {
+                      ...ready.image!,
+                      status: "error",
+                      error:
+                        failure instanceof Error
+                          ? failure.message
+                          : String(failure),
+                    },
+                  });
+                },
+              ),
+            );
+          }
+        })
+        .catch((failure) => {
+          signal.throwIfAborted();
+          value = {
+            ...value,
+            errors: [
+              ...value.errors!,
+              t("fcboard.quizForm.questionFailed", {
+                number: index + 1,
+                message:
+                  failure instanceof Error ? failure.message : String(failure),
+              }),
+            ],
+          };
+          publish();
+        }),
     ),
   );
   await Promise.all(illustrations);
@@ -527,7 +511,7 @@ const quizCards = (quiz: Quiz, previous?: Quiz) => {
             .join("")}</ol>`
         : ""
     }${q.solutionDiagram ? quizDiagram(q.solutionDiagram) : ""}<p>${quizText(
-      q.explanation,
+      q.explanation || "",
     )}</p></div></details></article>`;
   };
   const total = Math.max(

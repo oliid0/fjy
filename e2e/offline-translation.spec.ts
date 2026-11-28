@@ -60,12 +60,6 @@ for (const example of [
     await page.locator("[data-toolbar-pen]").click();
     await page
       .getByRole("button", {
-        name: example.language === "en" ? "Page 2" : "第 2 页",
-        exact: true,
-      })
-      .click();
-    await page
-      .getByRole("button", {
         name: example.language === "en" ? "Language pen" : "语言笔",
         exact: true,
       })

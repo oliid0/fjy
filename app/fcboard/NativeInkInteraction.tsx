@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import {
   CaptureUpdateAction,
@@ -7,7 +7,9 @@ import {
   isIframeLikeElement,
 } from "@fcboard/element";
 import { colorToHex, MIN_FONT_SIZE } from "@fcboard/common";
-import { getLanguage, t } from "@fcboard/fcboard/i18n";
+import { t } from "@fcboard/fcboard/i18n";
+import { LockedIcon } from "@fcboard/fcboard/components/icons";
+import { switchWhiteboardTip } from "@fcboard/fcboard/whiteboardPen";
 import { whiteboardInkStyle } from "@fcboard/fcboard/whiteboardPen";
 import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
@@ -20,7 +22,6 @@ import { classroomCommands, executeBoardCommand } from "./commands";
 import { transformBoardElement } from "./canvasTransform";
 import { createNativeEraserBackend } from "./nativeEraser";
 import { createNativeSceneRenderer } from "./nativeScene";
-import { Classroom } from "./native";
 import { currentTextInkLanguage, digitalInkEngine } from "./digitalInk";
 
 import "./NativeScene.scss";
@@ -107,6 +108,10 @@ const ink = registerPlugin<{
     listener: (contact: Contact) => void,
   ): Promise<{ remove(): Promise<void> }>;
   addListener(
+    event: "panelLock",
+    listener: (event: { locked: boolean }) => void,
+  ): Promise<{ remove(): Promise<void> }>;
+  addListener(
     event: "shortcut",
     listener: (event: { owner: string; action: string }) => void,
   ): Promise<{ remove(): Promise<void> }>;
@@ -148,6 +153,7 @@ export const NativeInkInteraction = ({
   api: FcboardImperativeAPI;
   inkProfile?: UIOptions["inkProfile"];
 }) => {
+  const [panelLocked, setPanelLocked] = useState(false);
   const currentProfile = useRef(inkProfile);
   const refreshProfile = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
@@ -168,6 +174,8 @@ export const NativeInkInteraction = ({
     let uiDirty = true;
     let uiViewport = "";
     let uiBounds: number[][] = [];
+    let gizmoBounds: number[][] = [];
+    let gizmosDirty = true;
     let uiBlocksInk = false;
     let inputReady = false;
     let startupReport: boolean | undefined;
@@ -550,8 +558,12 @@ export const NativeInkInteraction = ({
       if (enabled && uiDirty) {
         uiDirty = false;
         uiBounds = [];
+        gizmosDirty = true;
         uiBlocksInk = false;
         for (const node of document.querySelectorAll<Element>(boardControls)) {
+          if (node.matches(".fc-factory-gizmos [data-gizmo]")) {
+            continue;
+          }
           const visibility = getComputedStyle(node);
           if (
             visibility.display === "none" ||
@@ -592,7 +604,27 @@ export const NativeInkInteraction = ({
           }
         }
       }
-      const blocked: number[][] = enabled ? [...uiBounds] : [];
+      if (enabled && gizmosDirty) {
+        gizmosDirty = false;
+        gizmoBounds = [];
+        for (const node of document.querySelectorAll<Element>(
+          ".fc-factory-gizmos [data-gizmo]",
+        )) {
+          const visibility = getComputedStyle(node);
+          if (
+            visibility.display === "none" ||
+            visibility.visibility !== "visible" ||
+            visibility.pointerEvents === "none"
+          ) {
+            continue;
+          }
+          const box = node.getBoundingClientRect();
+          if (box.width > 0 && box.height > 0) {
+            gizmoBounds.push([box.left, box.top, box.right, box.bottom]);
+          }
+        }
+      }
+      const blocked: number[][] = enabled ? [...uiBounds, ...gizmoBounds] : [];
       // Table, label and question surfaces retain their live composition path.
       // Only on-screen boxes can intercept a contact.
       if (enabled && mode === "pen") {
@@ -871,6 +903,11 @@ export const NativeInkInteraction = ({
         void handleContact(contact).catch(fail);
       }
     });
+    const lockListener = ink.addListener("panelLock", (event) => {
+      if (active) {
+        setPanelLocked(event.locked);
+      }
+    });
     let shortcutQueue = Promise.resolve();
     const shortcutListener = ink.addListener("shortcut", (event) => {
       if (!event.action || event.owner !== api.id) {
@@ -896,20 +933,16 @@ export const NativeInkInteraction = ({
               },
             });
             api.setActiveTool({ type: "freedraw" });
-          } else if (event.action === "ops") {
-            await Classroom.openFactoryInsertion({
-              insertion: "signal",
-              preferOps: true,
-              language: getLanguage().code,
-            });
-          } else if (event.action === "lock" || event.action === "unlock") {
-            api.setToast({
-              message: t(
-                event.action === "lock"
-                  ? "fcboard.touch_locked"
-                  : "fcboard.touch_unlocked",
+          } else if (event.action === "tip") {
+            api.updateScene({
+              appState: switchWhiteboardTip(
+                api.getAppState(),
+                api.getAppState().whiteboardPenTip === "fine"
+                  ? "thick"
+                  : "fine",
               ),
             });
+            api.setActiveTool({ type: "freedraw" });
           } else if (event.action === "next" || event.action === "previous") {
             // Reuse the existing page navigation, including document pages,
             // first/last-page notices and the smart pointer's resize behavior.
@@ -956,14 +989,24 @@ export const NativeInkInteraction = ({
       schedule();
     };
     const observer = new MutationObserver((records) => {
+      let geometryChanged = false;
       if (
         records.some((record) => {
           const target = record.target;
+          // Inner orb frames animate CSS variables, not the button's hit area.
+          // Scanning all controls here on every frame stalls geometry gestures.
           if (
-            (target instanceof SVGElement &&
-              !target.closest(".fc-factory-gizmos")) ||
-            target instanceof HTMLCanvasElement
+            target instanceof Element &&
+            target.closest(".fc-voice-orb") &&
+            !target.matches(".fc-voice-orb")
           ) {
+            return false;
+          }
+          if (target instanceof SVGElement) {
+            geometryChanged ||= !!target.closest(".fc-factory-gizmos");
+            return false;
+          }
+          if (target instanceof HTMLCanvasElement) {
             return false;
           }
           if (record.type === "attributes") {
@@ -985,6 +1028,9 @@ export const NativeInkInteraction = ({
         })
       ) {
         scheduleUi();
+      } else if (geometryChanged) {
+        gizmosDirty = true;
+        schedule();
       }
     });
     observer.observe(document.documentElement, {
@@ -1077,8 +1123,17 @@ export const NativeInkInteraction = ({
       void eraser.reset().catch(() => {});
       void listener.then((handle) => handle.remove()).catch(() => {});
       void shortcutListener.then((handle) => handle.remove()).catch(() => {});
+      void lockListener.then((handle) => handle.remove()).catch(() => {});
       void ink.remove({ owner: api.id }).catch(() => {});
     };
   }, [api]);
-  return null;
+  return panelLocked ? (
+    <div
+      className="fc-panel-touch-lock"
+      role="status"
+      aria-label={t("fcboard.touch_locked")}
+    >
+      {LockedIcon}
+    </div>
+  ) : null;
 };

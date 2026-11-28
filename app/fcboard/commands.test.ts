@@ -86,6 +86,8 @@ describe("component commands", () => {
       { name: "files.open", args: { name: "牛顿定律.pptx" } },
     ],
     ["开始录制", { name: "record.start" }],
+    ["打开录制", { name: "record.open" }],
+    ["关闭录制", { name: "record.close" }],
     ["暂停录制", { name: "record.pause" }],
     ["继续录制", { name: "record.resume" }],
     ["使用聚光灯", { name: "tools.spotlight", args: { open: true } }],
@@ -256,6 +258,8 @@ it.each([
     { name: "insert.object", args: { kind: "table", rows: 3, columns: 4 } },
   ],
   ["start recording", { name: "record.start" }],
+  ["open the recording panel", { name: "record.open" }],
+  ["close the recording panel", { name: "record.close" }],
   [
     "open the document Mechanics.pptx",
     { name: "files.open", args: { name: "Mechanics.pptx" } },

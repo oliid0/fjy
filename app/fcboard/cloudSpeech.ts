@@ -11,6 +11,7 @@ const engine = registerPlugin<{
   start(options: {
     key: string;
     resource: string;
+    separateSpeakers?: boolean;
   }): Promise<{ session: string }>;
   push: PCMSpeechTransport["push"];
   stop(options: {
@@ -25,6 +26,7 @@ export const startCloudSpeech = (
   stream?: MediaStream,
   onActivity?: () => void,
   onInterim?: (line: TranscriptLine | null) => void,
+  separateSpeakers = false,
 ) => {
   if (!Capacitor.isNativePlatform()) {
     throw new Error(
@@ -37,19 +39,29 @@ export const startCloudSpeech = (
       t("fcboard.enter_your_doubao_speech_api_key_in_voice_settings"),
     );
   }
+  let session = "";
   return startPCMSpeech(
     {
-      start: () =>
-        engine.start({
+      start: async () => {
+        const result = await engine.start({
           key: settings.speechKey.trim(),
           resource: settings.speechResource,
-        }),
+          ...(separateSpeakers ? { separateSpeakers } : {}),
+        });
+        session = result.session;
+        return result;
+      },
       push: (options) => engine.push(options),
       stop: async (options) => ({
         lines: (await engine.stop(options))?.lines || [],
       }),
     },
-    onLine,
+    (line) =>
+      onLine(
+        line.speaker
+          ? { ...line, speaker: `${session}:${line.speaker}` }
+          : line,
+      ),
     onError,
     stream,
     true,

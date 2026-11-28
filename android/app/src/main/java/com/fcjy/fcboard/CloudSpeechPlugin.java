@@ -52,6 +52,7 @@ public class CloudSpeechPlugin extends Plugin {
                     || !resource.matches("volc\\.(seedasr|bigasr)\\.sauc\\.(duration|concurrent)")) {
                 call.reject("Enter an enabled Doubao Speech API key and resource ID in voice settings"); return;
             }
+            boolean separateSpeakers = Boolean.TRUE.equals(call.getBoolean("separateSpeakers", false));
             Session session = new Session(); active = session;
             try {
                 Request request = new Request.Builder()
@@ -61,7 +62,7 @@ public class CloudSpeechPlugin extends Plugin {
                 session.socket = client.newWebSocket(request, new WebSocketListener() {
                     @Override public void onOpen(WebSocket socket, Response response) {
                         try {
-                            if (!socket.send(ByteString.of(DoubaoSpeechProtocol.frame(1, 1, DoubaoSpeechProtocol.configuration())))) {
+                            if (!socket.send(ByteString.of(DoubaoSpeechProtocol.frame(1, 1, DoubaoSpeechProtocol.configuration(separateSpeakers))))) {
                                 throw new IOException("Unable to send speech configuration");
                             }
                             session.opened.countDown();

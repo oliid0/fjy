@@ -2,13 +2,19 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import { chat, parseJSON, visualMessage } from "./ai";
 import { agentContext, runBoardCommands } from "./agent";
-import { classroomCommands, executeBoardCommand } from "./commands";
-import { currentSettings } from "./settings";
+import {
+  classroomCommands,
+  executeBoardCommand,
+  verifyBoardCommandResult,
+} from "./commands";
+import { currentSettings, defaults, ARK_VISION_MODEL } from "./settings";
 import { agentResponsesEndpoint, runResponsesAgent } from "./responsesAgent";
 import { describeBoardTools } from "./realtimeTools";
+import { boardObservationAfterTools, observeBoard } from "./boardObservation";
 
 import type { Message } from "./ai";
 import type { BoardAgentAction } from "./agent";
+import type { BoardView } from "./boardObservation";
 import type { Command } from "./commands";
 
 export type BoardTask = {
@@ -28,15 +34,37 @@ export type BoardTask = {
 export const boardAgentRole = (name: string) => name.split(".")[0] || "board";
 
 const workerCommand = (name: string) =>
-  !/^voice\./.test(name) && !/^lesson\./.test(name) && name !== "ui.invoke";
+  !/^voice\./.test(name) &&
+  !/^lesson\./.test(name) &&
+  name !== "ui.invoke" &&
+  (name !== "record.start" || currentSettings().speech === "local");
 
-/** Both voice providers acknowledge visible work without waiting for model/tool completion. */
-export const voiceBoardCommand = (command: Command): Command => {
+/** Defer slow independent work while executing dependent UI and scene operations in order. */
+export const voiceBoardCommand = (
+  command: Command,
+  cloud = currentSettings().speech !== "local",
+): Command => {
+  if (cloud && command.name === "record.start") {
+    return { name: "record.open" };
+  }
   if (
-    !classroomCommands.isPublic("agent.start") ||
-    /^(?:agent|voice)\./.test(command.name) ||
-    /\.(?:inspect|list|snapshot|evaluate|describe)$/.test(command.name)
+    cloud &&
+    ["document.next", "document.previous"].includes(command.name) &&
+    !classroomCommands.has(command.name) &&
+    classroomCommands.isPublic("board.step")
   ) {
+    return {
+      name: "board.step",
+      args: {
+        direction: command.name === "document.next" ? "next" : "previous",
+      },
+    };
+  }
+  const background = cloud
+    ? /^research\.search$|\.generate$/.test(command.name)
+    : !/^(?:agent|voice)\./.test(command.name) &&
+      !/\.(?:inspect|list|snapshot|evaluate|describe)$/.test(command.name);
+  if (!classroomCommands.isPublic("agent.start") || !background) {
     return command;
   }
   return {
@@ -86,9 +114,14 @@ export const registerBoardAgents = () => {
       result?: unknown;
       error?: string;
     }[] = [];
+    const configured = currentSettings();
+    const verifyToolFailures = configured.speech !== "local";
     const dispatch = async (operation: Command, owner?: AbortSignal) => {
       try {
         const result = await executeBoardCommand(operation, owner);
+        if (verifyToolFailures) {
+          verifyBoardCommandResult(operation, result);
+        }
         results.push({ name: operation.name, ok: true, result });
         return result;
       } catch (failure) {
@@ -121,7 +154,6 @@ export const registerBoardAgents = () => {
         return result;
       }
     }
-    const configured = currentSettings();
     const settings = {
       ...configured,
       model: configured.textModel || configured.model,
@@ -129,28 +161,43 @@ export const registerBoardAgents = () => {
     const endpoint = agentResponsesEndpoint(settings.endpoint);
     const revision = classroomCommands.revision;
     const current = () => classroomCommands.isCurrent(revision, signal);
-    const visible = classroomCommands.has("canvas.snapshot")
-      ? ((await executeBoardCommand(
-          {
-            name: "canvas.snapshot",
-            args: {
-              sourceIds: task.sourceIds,
-              capture: !task.sourceIds?.length || configured.selectionImages,
-            },
-          },
-          signal,
-        )) as {
-          text?: string;
-          image?: string;
-          name?: string;
-          page?: number;
-        })
+    const useVision = configured.speech !== "local" && !!configured.apiKey;
+    const capture = !task.sourceIds?.length || configured.selectionImages;
+    const snapshot: Command = {
+      name: "canvas.snapshot",
+      args: {
+        sourceIds: task.sourceIds,
+        capture,
+        screen: useVision && !task.sourceIds?.length,
+      },
+    };
+    const visible = useVision
+      ? await observeBoard(signal, current, snapshot.args)
+      : classroomCommands.has(snapshot.name)
+      ? ((await executeBoardCommand(snapshot, signal)) as BoardView)
       : undefined;
+    const observeAfterTools =
+      useVision && capture
+        ? boardObservationAfterTools(visible, signal, current)
+        : undefined;
+    if (
+      useVision &&
+      capture &&
+      (visible?.image || configured.speech === "cloud")
+    ) {
+      settings.model =
+        configured.ocrModel ||
+        (endpoint &&
+        new URL(endpoint).hostname === "ark.cn-beijing.volces.com" &&
+        configured.model === defaults.model
+          ? ARK_VISION_MODEL
+          : configured.model);
+    }
     const permitted = workerCommand;
     const messages: Message[] = [
       {
         role: "system",
-        content: `You are an independent whiteboard task agent. Plan and execute from the complete goal, conversation, actual canvas and current tools. Roles describe responsibilities without restricting tools. Follow dependencies or start independent parallel tasks with agent.start; use agent.update for corrections. Call agent.say only for content the user should hear; it returns immediately so board work can continue. Use identical text for simultaneous writing/narration. Task status, success and failures remain internal data, without narration or progress panels. Verify actual results, never guess IDs or repeat successful operations. Do not manage voice sessions or obsolete lesson playback. ${
+        content: `You are an independent whiteboard task agent. Plan and execute from the complete goal, conversation, actual canvas and current tools. Inspect the current screenshot for visual evidence, canvas.inspect for exact editable coordinates, and ui.inspect for live controls. Write words with canvas.text presentation=handwritten. Draw non-text diagrams as editable canvas.ink strokes using coordinates within the inspected viewport. Use image.generate when the user wants an inserted illustration. Keep navigation and dependent actions in order. Delegate independent research, visuals, or quiz generation to separate agents with distinct goals and use agent.update for corrections. Call agent.say only for content the user should hear; it returns immediately so board work can continue. Use identical text for simultaneous writing/narration. Task status, success and failures remain internal data, without narration or progress panels. Verify actual results, never guess IDs or repeat successful operations. Do not manage voice sessions or obsolete lesson playback. ${
           endpoint
             ? " Use the supplied real function tools."
             : ' Return JSON {"action":"commands","commands":[{"name":"registered command","args":{}}]} or {"action":"done"} when complete.'
@@ -189,6 +236,8 @@ export const registerBoardAgents = () => {
         updates,
         dispatch,
         requireActions: command ? false : undefined,
+        verifyToolFailures,
+        observeAfterTools,
       });
       return { ...result, results };
     }
@@ -206,6 +255,8 @@ export const registerBoardAgents = () => {
       validate: (command) => permitted(command.name),
       settings,
       verify: true,
+      verifyToolFailures,
+      observeAfterTools,
       maxTokens: 4096,
       maxRounds: 12,
       updates,

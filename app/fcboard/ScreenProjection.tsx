@@ -15,7 +15,7 @@ import {
 } from "@fcboard/element";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 import { CloseIcon, fullscreenIcon } from "@fcboard/fcboard/components/icons";
-import { useI18n } from "@fcboard/fcboard/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
@@ -462,18 +462,136 @@ function ProjectionControls({
   );
 }
 
+type ProjectionState = {
+  open: boolean;
+  enabled: boolean;
+  phase:
+    | "off"
+    | "starting"
+    | "waiting"
+    | "connecting"
+    | "live"
+    | "unavailable"
+    | "error";
+  error?: string;
+};
+
+const inactive: ProjectionState = { open: false, enabled: false, phase: "off" };
+
 export const ScreenProjection = ({ api }: { api: FcboardImperativeAPI }) => {
-  const [request, setRequest] = useState(0);
-  const release = useCallback(() => setRequest(0), []);
-  useEffect(
-    () =>
-      classroomCommands.register("projection.open", "@internal", () => {
-        setRequest((previous) => previous + 1);
-      }),
-    [],
-  );
+  const [request, setRequest] = useState<{ start: boolean } | null>(null);
+  const stopReceivers = useRef<(() => Promise<void>) | undefined>(undefined);
+  const startRequest = useRef<AbortController | null>(null);
+  const supported =
+    Capacitor.getPlatform() === "android" && !!api.setSceneProjection;
+  const release = useCallback(() => {
+    startRequest.current?.abort();
+    setRequest(null);
+  }, []);
+  useEffect(() => {
+    const state = () =>
+      (classroomCommands.read("projection") as ProjectionState | undefined) ||
+      inactive;
+    const registrations = [
+      classroomCommands.register(
+        "projection.open",
+        "Open the screen projection controls.",
+        () => {
+          setRequest({ start: false });
+        },
+      ),
+      classroomCommands.register(
+        "projection.inspect",
+        "Read actual screen projection state. Waiting means ready for a remote sender; live means actual video is visible.",
+        state,
+      ),
+      classroomCommands.register(
+        "projection.start",
+        "Start Android screen projection receivers and report their actual state. Waiting means ready to receive; starting means pending; live means a connected video stream.",
+        async (args) => {
+          const signal =
+            args.signal instanceof AbortSignal ? args.signal : undefined;
+          signal?.throwIfAborted();
+          if (!supported) {
+            throw new Error(t("projection.androidOnly"));
+          }
+          const ready = state();
+          if (
+            ready.enabled &&
+            ["waiting", "connecting", "live"].includes(ready.phase)
+          ) {
+            return ready;
+          }
+          startRequest.current?.abort();
+          const pending = new AbortController();
+          startRequest.current = pending;
+          const abort = () => pending.abort(signal?.reason);
+          signal?.addEventListener("abort", abort, { once: true });
+          try {
+            return await new Promise<ProjectionState>((resolve, reject) => {
+              const dispose = () => {
+                unwatch();
+                clearTimeout(timer);
+                pending.signal.removeEventListener("abort", cancelled);
+              };
+              const cancelled = () => {
+                dispose();
+                reject(pending.signal.reason);
+              };
+              const unwatch = classroomCommands.watch("projection", () => {
+                const current = state();
+                if (
+                  current.enabled &&
+                  !["starting", "off"].includes(current.phase)
+                ) {
+                  dispose();
+                  resolve(current);
+                }
+              });
+              const timer = setTimeout(() => {
+                dispose();
+                resolve(state());
+              }, 12000);
+              pending.signal.addEventListener("abort", cancelled, {
+                once: true,
+              });
+              setRequest({ start: true });
+            });
+          } finally {
+            signal?.removeEventListener("abort", abort);
+            if (startRequest.current === pending) {
+              startRequest.current = null;
+            }
+          }
+        },
+      ),
+      classroomCommands.register(
+        "projection.stop",
+        "Close the projection panel and stop the associated receivers and stream. Returns off after real teardown.",
+        async () => {
+          startRequest.current?.abort();
+          try {
+            await stopReceivers.current?.();
+          } finally {
+            release();
+          }
+          return inactive;
+        },
+      ),
+    ];
+    return () => {
+      startRequest.current?.abort();
+      registrations.forEach((unregister) => unregister());
+    };
+  }, [release, supported]);
   return request ? (
-    <ProjectionSession api={api} request={request} release={release} />
+    <ProjectionSession
+      api={api}
+      request={request}
+      release={release}
+      supported={supported}
+      stopReceivers={stopReceivers}
+    />
   ) : null;
 };
 
@@ -481,14 +599,16 @@ const ProjectionSession = ({
   api,
   request,
   release,
+  supported,
+  stopReceivers,
 }: {
   api: FcboardImperativeAPI;
-  request: number;
+  request: { start: boolean };
   release: () => void;
+  supported: boolean;
+  stopReceivers: React.MutableRefObject<(() => Promise<void>) | undefined>;
 }) => {
   const { t } = useI18n();
-  const supported =
-    Capacitor.getPlatform() === "android" && !!api.setSceneProjection;
   const receiver = useRef<Receiver>(undefined);
   const connection = useRef<Connection>(undefined);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -501,7 +621,7 @@ const ProjectionSession = ({
   const [native, setNative] = useState<NativeReceivers>();
   const disconnectCurrent = useRef<() => void>(undefined);
   const [open, setOpen] = useState(true);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(request.start);
   const [foreground, setForeground] = useState(() => !document.hidden);
   const [web, setWeb] = useState<Receiver>();
   const [network, setNetwork] = useState<LocalNetwork>();
@@ -779,6 +899,7 @@ const ProjectionSession = ({
       }
     });
     let networkTimer: ReturnType<typeof setTimeout>;
+    let openingWeb: Promise<Receiver> | undefined;
     const refreshWeb = async () => {
       try {
         const current = receiver.current;
@@ -803,7 +924,8 @@ const ProjectionSession = ({
         if (!nextNetwork.address) {
           setWebError("projection.networkError");
         } else if (!receiver.current) {
-          const next = await projection.start({ session });
+          openingWeb = projection.start({ session });
+          const next = await openingWeb;
           if (disposed) {
             await projection.stop(next);
           } else {
@@ -857,27 +979,50 @@ const ProjectionSession = ({
         }
       }
     };
-    void startNative();
+    const openingNative = startNative();
+    let stopped: Promise<void> | undefined;
+    const stop = () =>
+      (stopped ||= (async () => {
+        disposed = true;
+        clearTimeout(networkTimer);
+        disconnectCurrent.current = undefined;
+        cancel();
+        unwatch();
+        close();
+        receiver.current = undefined;
+        await Promise.allSettled([openingNative, openingWeb]);
+        const results = await Promise.allSettled([
+          ...nativeProtocols.map((protocol) =>
+            nativeProjection.stop({ protocol, session }),
+          ),
+          projection.stop({ session }),
+          listener
+            .then((subscription) => subscription.remove())
+            .catch(() => {}),
+        ]);
+        const failure = results.find(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected" &&
+            !["UNAVAILABLE", "UNIMPLEMENTED"].includes(result.reason?.code),
+        );
+        if (failure) {
+          throw failure.reason;
+        }
+      })());
+    stopReceivers.current = stop;
     return () => {
-      disposed = true;
-      clearTimeout(networkTimer);
-      disconnectCurrent.current = undefined;
-      cancel();
-      unwatch();
-      for (const protocol of nativeProtocols) {
-        void nativeProjection.stop({ protocol, session }).catch(() => {});
+      if (stopReceivers.current === stop) {
+        stopReceivers.current = undefined;
       }
-      close();
-      void listener
-        .then((subscription) => subscription.remove())
-        .catch(() => {});
-      receiver.current = undefined;
-      void projection.stop({ session }).catch(() => {});
+      void stop().catch(() => {});
     };
-  }, [api, enabled, foreground, supported]);
+  }, [api, enabled, foreground, stopReceivers, supported]);
 
   useEffect(() => {
     setOpen(true);
+    if (request.start) {
+      setEnabled(true);
+    }
   }, [request]);
 
   useEffect(() => {
@@ -970,6 +1115,35 @@ const ProjectionSession = ({
   const ready = !!web || readyNames.length > 0;
   const nativeConnecting = readyNames.some(
     (engine) => engine?.state === "connecting",
+  );
+  const status: ProjectionState = {
+    open,
+    enabled,
+    phase: !supported
+      ? "unavailable"
+      : !enabled
+      ? "off"
+      : stage === "live"
+      ? "live"
+      : stage === "connecting" || nativeConnecting
+      ? "connecting"
+      : ready
+      ? "waiting"
+      : error || webError || nativeError
+      ? "error"
+      : "starting",
+    error:
+      error || webError || (nativeError ? "projection.nativeError" : undefined),
+  };
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  useEffect(
+    () => classroomCommands.context("projection", () => statusRef.current),
+    [],
+  );
+  useEffect(
+    () => classroomCommands.changed("projection"),
+    [status.open, status.enabled, status.phase, status.error],
   );
   const playingTitle = readyNames.find(
     (engine) => engine?.state === "connected" && engine.audio,

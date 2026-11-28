@@ -30,6 +30,28 @@ import type { CloudShareConfig } from "./cloudShare";
 import type { Board } from "./boards";
 import type { BoardPages, BoardCanvasSize } from "./boardExport";
 
+const saveRasterPages = (
+  pages: { board: Board; page: number }[],
+  title: string,
+  format: "pdf" | "jpg",
+  size: BoardCanvasSize,
+  signal?: AbortSignal,
+) =>
+  savePageFiles(
+    pages.map(({ board, page }) => ({
+      page,
+      blob: () =>
+        exportToBlob({
+          ...boardPageExportOptions(board, size),
+          mimeType: "image/jpeg",
+          quality: 1,
+        }),
+    })),
+    title,
+    format,
+    signal,
+  );
+
 /** The existing menu shares chosen pages; collaboration is a separate operation. */
 export const BoardShare = () => {
   const { langCode } = useI18n();
@@ -207,14 +229,45 @@ export const BoardShare = () => {
     );
     const stopSave = classroomCommands.register(
       "board.saveFile",
-      "Choose BZD/JPG/PDF and save using the system location picker.",
-      (args) =>
-        openPages(
-          false,
-          true,
-          args.ids,
-          args.signal instanceof AbortSignal ? args.signal : undefined,
-        ),
+      "Save the active whiteboard with args.format=pdf|jpg through the real save picker. Returns saved=false when cancelled. When format is omitted, open the existing page and format chooser (BZD/JPG/PDF).",
+      async (args) => {
+        const signal =
+          args.signal instanceof AbortSignal ? args.signal : undefined;
+        if (args.format === undefined) {
+          return openPages(false, true, args.ids, signal);
+        }
+        if (args.format !== "pdf" && args.format !== "jpg") {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        signal?.throwIfAborted();
+        const workspace = (await classroomCommands.execute({
+          name: "board.pages",
+        })) as BoardPages;
+        signal?.throwIfAborted();
+        const board = workspace.boards.find(
+          ({ id }) => id === workspace.active,
+        );
+        if (!board) {
+          throw new Error(t("fcboard.board_not_found"));
+        }
+        const saved = await saveRasterPages(
+          [{ board, page: 1 }],
+          board.name,
+          args.format,
+          workspace.canvasSize ?? boardCanvasSize(),
+          signal,
+        );
+        return { saved, cancelled: !saved, id: board.id, format: args.format };
+      },
+      {
+        parameters: {
+          type: "object",
+          properties: {
+            format: { type: "string", enum: ["pdf", "jpg"] },
+            ids: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
     );
     const stopMail = classroomCommands.register(
       "board.mail",
@@ -375,18 +428,11 @@ export const BoardShare = () => {
         selected.includes(board.id) ? [{ board, page: index + 1 }] : [],
       );
       if (method === "download" || method === "pdf") {
-        const saved = await savePageFiles(
-          chosen.map(({ board, page }) => ({
-            page,
-            blob: () =>
-              exportToBlob({
-                ...boardPageExportOptions(board, canvasSize),
-                mimeType: "image/jpeg",
-                quality: 1,
-              }),
-          })),
+        const saved = await saveRasterPages(
+          chosen,
           "Fcboard",
           method === "pdf" ? "pdf" : "jpg",
+          canvasSize,
           controller.signal,
         );
         if (saved && current === generation.current) {

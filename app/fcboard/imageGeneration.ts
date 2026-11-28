@@ -273,6 +273,7 @@ export const insertImageResult = async (
     ? { x: viewport.left, y: viewport.top }
     : insertionPoint(api, { width, height });
   if (onDocument) {
+    const id = crypto.randomUUID();
     await classroomCommands.execute({
       name: "document.draw",
       args: {
@@ -284,7 +285,7 @@ export const insertImageResult = async (
         sourcePage: placement.sourcePage,
         signal,
         shape: {
-          id: crypto.randomUUID(),
+          id,
           type: "image",
           ...position,
           width,
@@ -292,11 +293,11 @@ export const insertImageResult = async (
         },
       },
     });
-    return;
+    return [id];
   }
   const fileId = crypto.randomUUID() as FileId;
   api.addFiles([{ id: fileId, dataURL, mimeType, created: Date.now() }]);
-  insertElements(
+  return insertElements(
     api,
     [
       {

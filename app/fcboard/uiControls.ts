@@ -92,7 +92,9 @@ const disabled = (node: HTMLElement) =>
 const readonly = (node: HTMLElement) =>
   (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement
     ? node.readOnly
-    : false) || node.getAttribute("aria-readonly") === "true";
+    : false) ||
+  node.getAttribute("aria-readonly") === "true" ||
+  node.dataset.fcboardManualOnly === "true";
 const label = (node: HTMLElement) =>
   text(
     node.getAttribute("aria-label") ||

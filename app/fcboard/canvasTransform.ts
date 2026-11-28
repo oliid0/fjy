@@ -165,7 +165,12 @@ export const transformBoardElement = (
             ...(element.type === "freedraw" &&
             points &&
             data.fcWrittenHash === hashString(JSON.stringify(element.points))
-              ? { fcWrittenHash: hashString(JSON.stringify(points)) }
+              ? {
+                  fcWrittenHash: hashString(JSON.stringify(points)),
+                  ...(typeof data.fcWrittenHeight === "number"
+                    ? { fcWrittenHeight: data.fcWrittenHeight * scale }
+                    : {}),
+                }
               : {}),
           },
         }

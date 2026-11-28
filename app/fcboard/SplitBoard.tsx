@@ -674,6 +674,11 @@ export const SplitBoard = ({ api }: { api: FcboardImperativeAPI }) => {
     Array.from({ length: 4 }, () => ({ strokes: [], color: 0 })),
   );
   useEffect(
+    () => classroomCommands.context("split", () => current.current),
+    [],
+  );
+  useEffect(() => classroomCommands.changed("split"), [open, count]);
+  useEffect(
     () =>
       classroomCommands.register(
         "tools.split",

@@ -143,6 +143,35 @@ it("inspects only visible controls in the owned editor and never returns credent
   }
 });
 
+it("keeps explicitly manual controls visible and rejects synthetic activation", async () => {
+  const start = vi.fn();
+  const { change, inspect, stop } = setup(
+    <div data-testid="editor-root">
+      <button data-fcboard-manual-only="true" onClick={start}>
+        Start recording
+      </button>
+    </div>,
+  );
+  try {
+    expect((await inspect()).controls[0]).toMatchObject({
+      label: "Start recording",
+      actions: [],
+      readonly: true,
+    });
+    await expect(change("Start recording", "click")).rejects.toThrow(
+      "UI_CONTROL_DISABLED",
+    );
+    await expect(
+      change("Start recording", "key", { key: "Enter" }),
+    ).rejects.toThrow("UI_CONTROL_DISABLED");
+    expect(start).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Start recording" }));
+    expect(start).toHaveBeenCalledTimes(1);
+  } finally {
+    stop();
+  }
+});
+
 it("changes real React text, MUI switches and slider values, and returns their measured outputs", async () => {
   const { change, stop } = setup();
   try {

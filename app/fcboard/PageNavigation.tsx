@@ -4,6 +4,16 @@ import { t } from "@fcboard/fcboard/i18n";
 import { classroomCommands, executeBoardCommand } from "./commands";
 import { TransientMessage } from "./TransientMessage";
 
+const adjacentBoard = (direction: -1 | 1) => {
+  const state = classroomCommands.read("boards") as
+    | { active: string; boards: { id: string; name?: string }[] }
+    | undefined;
+  const index = state?.boards.findIndex(({ id }) => id === state.active) ?? -1;
+  return state && index >= 0
+    ? { active: state.active, next: state.boards[index + direction] }
+    : undefined;
+};
+
 /** ZWhiteBoardActivity.onKeyDown / SkizzeService: PageUp/PageDown turn pages. */
 export const PageNavigation = () => {
   const pending = useRef<AbortController | undefined>(undefined);
@@ -14,6 +24,43 @@ export const PageNavigation = () => {
     id: number;
   }>();
   useEffect(() => {
+    const step = classroomCommands.register(
+      "board.step",
+      "Switch to the next or previous whiteboard in the saved board order. args.direction=next|previous. At the first or last board returns changed=false. Use document.next/previous to turn pages in open courseware.",
+      async (args) => {
+        if (args.direction !== "next" && args.direction !== "previous") {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        const destination = adjacentBoard(args.direction === "next" ? 1 : -1);
+        if (!destination) {
+          throw new Error(t("fcboard.board_not_found"));
+        }
+        if (!destination.next) {
+          return {
+            changed: false,
+            boundary: args.direction === "next" ? "last" : "first",
+            active: destination.active,
+          };
+        }
+        await executeBoardCommand(
+          { name: "board.switch", args: { id: destination.next.id } },
+          args.signal instanceof AbortSignal ? args.signal : undefined,
+        );
+        const active = (
+          classroomCommands.read("boards") as { active?: string } | undefined
+        )?.active;
+        return { changed: active === destination.next.id, active };
+      },
+      {
+        parameters: {
+          type: "object",
+          properties: {
+            direction: { type: "string", enum: ["next", "previous"] },
+          },
+          required: ["direction"],
+        },
+      },
+    );
     const keydown = (event: KeyboardEvent) => {
       if (
         !["PageUp", "PageDown"].includes(event.key) ||
@@ -77,15 +124,11 @@ export const PageNavigation = () => {
           name: direction > 0 ? "document.next" : "document.previous",
         };
       } else {
-        const boards = classroomCommands.read("boards") as
-          | { active: string; boards: { id: string }[] }
-          | undefined;
-        const index =
-          boards?.boards.findIndex((board) => board.id === boards.active) ?? -1;
-        if (!boards || index < 0) {
+        const destination = adjacentBoard(direction);
+        if (!destination) {
           return;
         }
-        const next = boards.boards[index + direction];
+        const { next } = destination;
         if (!next) {
           setNotice({
             message: t(
@@ -122,6 +165,7 @@ export const PageNavigation = () => {
     window.addEventListener("keydown", keydown, true);
     return () => {
       window.removeEventListener("keydown", keydown, true);
+      step();
       pending.current?.abort();
     };
   }, []);

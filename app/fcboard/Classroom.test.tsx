@@ -32,7 +32,7 @@ import * as recordingExport from "./recordingExport";
 import * as localSpeech from "./localSpeech";
 import * as cloudSpeech from "./cloudSpeech";
 import * as duplex from "./duplexSpeech";
-import { classroomCommands } from "./commands";
+import { classroomCommands, directCommand } from "./commands";
 import { BoardRecorder, loadRecordings, saveRecordings } from "./recording";
 import {
   currentSettings,
@@ -3000,7 +3000,7 @@ describe("selection-driven classroom controls", () => {
   });
 
   it.each(["success", "error", "changed"])(
-    "sends only the selected PNG to Creative and preserves source until a current result: %s",
+    "routes Creative after two seconds and preserves source until a current result: %s",
     async (outcome) => {
       selectText("a dog with a garden background");
       const source = scene[0];
@@ -3010,7 +3010,11 @@ describe("selection-driven classroom controls", () => {
         image: "data:image/png;base64,selected" as DataURL,
       });
       const recognize = vi.spyOn(ocr, "recognizeHandwriting");
-      const chat = vi.spyOn(ai, "chat");
+      const text = "a dog with a garden background";
+      const drawing = outcome !== "success";
+      const chat = vi
+        .spyOn(ai, "chat")
+        .mockResolvedValue(JSON.stringify({ prompt: text, drawing }));
       let complete!: (image: images.GeneratedImage) => void;
       let fail!: (error: Error) => void;
       const generate = vi.spyOn(images, "generateImage").mockImplementation(
@@ -3022,17 +3026,29 @@ describe("selection-driven classroom controls", () => {
       );
       render(<Classroom api={api} />);
       fireEvent.click(screen.getByRole("button", { name: "AI" }));
-      fireEvent.click(
-        screen.getByRole("menuitem", { name: t("fcboard.selection_creative") }),
-      );
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        fireEvent.click(
+          screen.getByRole("menuitem", {
+            name: t("fcboard.selection_creative"),
+          }),
+        );
+        await act(async () => vi.advanceTimersByTimeAsync(1999));
+        expect(chat).not.toHaveBeenCalled();
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+      } finally {
+        vi.useRealTimers();
+      }
       await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
       expect(scene).toEqual([source]);
       expect(api.addFiles).not.toHaveBeenCalled();
       expect(generate).toHaveBeenCalledWith(
-        expect.stringContaining("Create freely"),
+        expect.stringContaining(text),
         expect.any(AbortSignal),
         {
-          referenceImage: "data:image/png;base64,selected",
+          referenceImage: drawing
+            ? "data:image/png;base64,selected"
+            : undefined,
           transparent: false,
         },
       );
@@ -3068,7 +3084,7 @@ describe("selection-driven classroom controls", () => {
       }
       expect(capture).toHaveBeenCalledWith(api, false, [source], undefined);
       expect(recognize).not.toHaveBeenCalled();
-      expect(chat).not.toHaveBeenCalled();
+      expect(chat).toHaveBeenCalledTimes(1);
     },
   );
 
@@ -3362,6 +3378,80 @@ describe("selection-driven classroom controls", () => {
       expect(capture).toHaveBeenCalledTimes(selectionImages ? 1 : 0);
     },
   );
+
+  it("runs a selected cloud AI question through the voice tool and returns what was written", async () => {
+    saveSettings(
+      { ...currentSettings(), ocr: "cloud", answerStyle: "text" },
+      false,
+    );
+    selectText("一个立方体有几个面？");
+    const source = scene[0];
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: [source],
+      text: "一个立方体有几个面？",
+      image: "data:image/png;base64,question" as DataURL,
+    });
+    vi.spyOn(ai, "chat").mockResolvedValue("六个面。");
+    const view = render(<Classroom api={api} />);
+    try {
+      let result: unknown;
+      await act(async () => {
+        result = await classroomCommands.execute({
+          name: "selection.action",
+          args: { action: "question", signal: new AbortController().signal },
+        });
+      });
+      const answer = scene.find(
+        (element) => element.type === "text" && element.text === "六个面。",
+      );
+      expect(result).toEqual({
+        action: "question",
+        ids: [answer!.id],
+        answer: "六个面。",
+      });
+      expect(scene.map(({ id }) => id)).toContain(source.id);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it("uses the full board and the selected handwriting together for cloud Q&A", async () => {
+    saveSettings(
+      { ...currentSettings(), ocr: "cloud", selectionImages: false },
+      false,
+    );
+    selectText("求图中物体的重量");
+    const source = scene[0];
+    const diagram = API.createElement({
+      type: "freedraw",
+      x: 440,
+      y: 90,
+      points: [pointFrom(0, 0), pointFrom(40, 30)],
+    });
+    scene = [...scene, diagram];
+    const capture = vi
+      .spyOn(ai, "boardContext")
+      .mockImplementation(async (_api, whole) => ({
+        elements: whole ? [source, diagram] : [source],
+        text: whole ? "已知质量为 2 kg" : "求图中物体的重量",
+        image: (whole
+          ? "data:image/png;base64,full-board"
+          : "data:image/png;base64,question") as DataURL,
+      }));
+    const answer = vi.spyOn(ai, "chat").mockResolvedValue("约 19.6 N。");
+    render(<Classroom api={api} />);
+    askSelection();
+    await waitFor(() =>
+      expect(scene).toContainEqual(
+        expect.objectContaining({ type: "text", text: "约 19.6 N。" }),
+      ),
+    );
+    const messages = JSON.stringify(answer.mock.calls[0][0]);
+    expect(messages).toContain("base64,question");
+    expect(messages).toContain("base64,full-board");
+    expect(messages).toContain("已知质量为 2 kg");
+    expect(capture).toHaveBeenCalledTimes(2);
+  });
 
   it("uses one language selector and opens handwriting packs as its child page", async () => {
     render(<Classroom api={api} />);
@@ -4315,6 +4405,269 @@ describe("selection-driven classroom controls", () => {
         await classroomCommands.execute({ name: "voice.toggle" });
       });
       expect(session.cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it("shares the recording stream with cloud diarization and saves both speakers despite a duplex restore error", async () => {
+    await saveRecordings([]);
+    saveSettings(
+      {
+        ...defaults,
+        speech: "cloud",
+        assistantVoice: "duplex",
+        autoSummary: true,
+        apiKey: "ark-key",
+        speechKey: "speech-key",
+      },
+      false,
+    );
+    const stream = {} as MediaStream;
+    const session = {
+      startedAt: Date.now(),
+      speak: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      interrupt: vi.fn().mockResolvedValue(undefined),
+      flush: vi.fn().mockResolvedValue(undefined),
+      prepareRecording: vi.fn().mockResolvedValue(undefined),
+      useRecordingStream: vi.fn().mockResolvedValue(undefined),
+      restoreCapture: vi
+        .fn()
+        .mockRejectedValue(new Error("audio capture unavailable")),
+    };
+    const duplexStart = vi
+      .spyOn(duplex, "startDuplexSpeech")
+      .mockResolvedValue(session);
+    const recorderStart = vi
+      .spyOn(BoardRecorder.prototype, "start")
+      .mockResolvedValue(undefined);
+    vi.spyOn(BoardRecorder.prototype, "audioStream", "get").mockReturnValue(
+      stream,
+    );
+    vi.spyOn(BoardRecorder.prototype, "pause").mockImplementation(() => {});
+    const recorderStop = vi
+      .spyOn(BoardRecorder.prototype, "stop")
+      .mockResolvedValue({
+        blob: new Blob(["recorded"], { type: "audio/webm" }),
+        duration: 7,
+      });
+    let deliver!: (line: {
+      time: number;
+      text: string;
+      speaker: string;
+    }) => void;
+    const asrStop = vi.fn(async () =>
+      deliver({ time: 5, text: "我建议增加任务提醒。", speaker: "second" }),
+    );
+    const asr = vi
+      .spyOn(cloudSpeech, "startCloudSpeech")
+      .mockImplementation(async (onLine) => {
+        deliver = onLine;
+        return { stop: asrStop, cancel: vi.fn().mockResolvedValue(undefined) };
+      });
+    const summary = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValue("按发言人整理的纪要");
+    const exported = vi
+      .spyOn(recordingExport, "autoSaveRecording")
+      .mockResolvedValue({ saved: true });
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+        await classroomCommands.execute({ name: "record.open" });
+      });
+      expect(recorderStart).not.toHaveBeenCalled();
+      const start = await screen.findByRole("button", {
+        name: t("fcboard.start_recording"),
+      });
+      expect(start).toHaveAttribute("data-fcboard-manual-only", "true");
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.microphone") }),
+      );
+      await act(async () => {
+        fireEvent.click(start);
+      });
+      expect(recorderStart.mock.calls[0][0]).toBe("audio");
+      expect(asr.mock.calls[0][2]).toBe(stream);
+      expect(asr.mock.calls[0][5]).toBe(true);
+      expect(session.useRecordingStream).toHaveBeenCalledWith(stream);
+      act(() => {
+        duplexStart.mock.calls[0][0].line({
+          time: 1,
+          text: "助手字幕不会重复写入文稿",
+        });
+        deliver({ time: 1, text: "我建议简化作业流程。", speaker: "first" });
+      });
+      await act(async () => {
+        await expect(
+          classroomCommands.execute(directCommand("关闭录制")!),
+        ).resolves.toEqual({ open: false, recording: true });
+      });
+      expect(recorderStop).not.toHaveBeenCalled();
+      await act(async () => {
+        await classroomCommands.execute({ name: "record.stop" });
+      });
+      expect(asrStop.mock.invocationCallOrder[0]).toBeLessThan(
+        recorderStop.mock.invocationCallOrder[0],
+      );
+      expect(session.cancel).not.toHaveBeenCalled();
+      const [saved] = await loadRecordings();
+      expect(saved.transcript).toEqual([
+        expect.objectContaining({ speaker: "A", text: "我建议简化作业流程。" }),
+        expect.objectContaining({ speaker: "B", text: "我建议增加任务提醒。" }),
+      ]);
+      expect(summary.mock.calls[0][0][0].content).toContain(
+        "each labeled speaker",
+      );
+      expect(summary.mock.calls[0][0][1].content).toContain(
+        "[B] 我建议增加任务提醒。",
+      );
+      expect(exported).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transcript: saved.transcript,
+          summary: "按发言人整理的纪要",
+        }),
+      );
+    } finally {
+      view.unmount();
+      await saveRecordings([]);
+    }
+  });
+
+  it("keeps a cloud spoken turn through its owned file and page changes", async () => {
+    saveSettings(
+      {
+        ...defaults,
+        endpoint: "https://example.com/v1/chat/completions",
+        apiKey: "ark",
+        speech: "cloud",
+        assistantVoice: "agent",
+      },
+      false,
+    );
+    let deliver!: (line: { text: string; time: number }) => void;
+    vi.spyOn(cloudSpeech, "startCloudSpeech").mockImplementation(
+      async (line) => {
+        deliver = line;
+        return {
+          stop: vi.fn().mockResolvedValue(undefined),
+          cancel: vi.fn().mockResolvedValue(undefined),
+        };
+      },
+    );
+    const chat = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          action: "commands",
+          commands: [{ name: "files.open", args: { name: "Physics.pptx" } }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          action: "commands",
+          commands: [{ name: "document.next" }],
+        }),
+      )
+      .mockResolvedValue(JSON.stringify({ action: "done" }));
+    const view = render(<Classroom api={api} />);
+    const release: (() => void)[] = [];
+    let page = 1;
+    let owner: AbortSignal | undefined;
+    try {
+      release.push(
+        classroomCommands.register("canvas.snapshot", "@internal", () => ({
+          text: `页面 ${page}`,
+          page,
+          image: `data:image/png;base64,page${page}`,
+        })),
+      );
+      const execute = classroomCommands.execute.bind(classroomCommands);
+      vi.spyOn(classroomCommands, "execute").mockImplementation(
+        async (command) => {
+          if (command.name !== "files.open") {
+            return execute(command);
+          }
+          owner = command.args?.signal as AbortSignal;
+          classroomCommands.invalidate(owner);
+          release.push(
+            classroomCommands.context("document", () => ({
+              id: "physics",
+              name: "Physics.pptx",
+              page,
+              ink: [],
+              selection: [],
+              text: "",
+              viewport: { left: 0, top: 0, scroll: 0 },
+            })),
+          );
+          release.push(
+            classroomCommands.register("document.next", "Turn", (next) => {
+              page = 2;
+              classroomCommands.touch(next.signal as AbortSignal);
+              classroomCommands.changed("document");
+              return { page };
+            }),
+          );
+          return { page };
+        },
+      );
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      act(() =>
+        deliver({
+          time: 1,
+          text: "打开课件 Physics.pptx，然后翻到第二页并查看内容",
+        }),
+      );
+      await waitFor(() => expect(chat).toHaveBeenCalledTimes(3), {
+        timeout: 2000,
+      });
+      expect(owner?.aborted).toBe(false);
+      expect(page).toBe(2);
+      expect(JSON.stringify(chat.mock.calls[2][0].at(-1))).toContain(
+        "base64,page2",
+      );
+    } finally {
+      view.unmount();
+      release.forEach((stop) => stop());
+    }
+  });
+
+  it("keeps cloud voice commands available when the key has ASR but no duplex access", async () => {
+    saveSettings(
+      {
+        ...defaults,
+        speech: "cloud",
+        assistantVoice: "duplex",
+        speechKey: "speech-key",
+      },
+      false,
+    );
+    const duplexStart = vi
+      .spyOn(duplex, "startDuplexSpeech")
+      .mockRejectedValue(new Error("Live speech connection failed (HTTP 403)"));
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const asr = vi.spyOn(cloudSpeech, "startCloudSpeech").mockResolvedValue({
+      stop: vi.fn().mockResolvedValue(undefined),
+      cancel,
+    });
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      expect(duplexStart).toHaveBeenCalledTimes(1);
+      expect(asr).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(duplexStart).toHaveBeenCalledTimes(1);
     } finally {
       view.unmount();
     }

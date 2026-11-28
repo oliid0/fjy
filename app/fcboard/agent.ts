@@ -70,7 +70,9 @@ export const runBoardCommands = async (
     validate?: (command: Command) => boolean;
     context?: () => unknown;
     verify?: boolean;
+    verifyToolFailures?: boolean;
     observe?: () => unknown | Promise<unknown>;
+    observeAfterTools?: () => Promise<Message>;
     settings?: Settings;
     updates?: () => string[];
     dispatch?: (command: Command, signal?: AbortSignal) => Promise<unknown>;
@@ -80,6 +82,7 @@ export const runBoardCommands = async (
   let calls = 0;
   let textStyleConfigured = false;
   const conversation = [...messages];
+  const failures = new Map<string, unknown>();
   const maxRounds = options.maxRounds ?? 6;
   for (let round = 0; round < maxRounds; round++) {
     if (signal?.aborted || !current()) {
@@ -98,6 +101,9 @@ export const runBoardCommands = async (
       continue;
     }
     if (action.action !== "commands") {
+      if (failures.size) {
+        throw failures.values().next().value;
+      }
       return action;
     }
     const commands = action.commands;
@@ -181,8 +187,18 @@ export const runBoardCommands = async (
           // Otherwise the question's older style silently overrides the command.
           textStyleConfigured = true;
         }
+        failures.delete(command.name);
         results.push({ name: command.name, ok: true, result });
       } catch (failure) {
+        if (options.verifyToolFailures) {
+          if (
+            failure instanceof DOMException &&
+            failure.name === "AbortError"
+          ) {
+            throw failure;
+          }
+          failures.set(command.name, failure);
+        }
         if (
           action.continue !== true &&
           !options.completion &&
@@ -213,6 +229,7 @@ export const runBoardCommands = async (
       );
     }
     const observation = options.observe ? await options.observe() : undefined;
+    const currentView = await options.observeAfterTools?.();
     signal?.throwIfAborted();
     if (!current()) {
       return { action: "done" };
@@ -233,6 +250,7 @@ export const runBoardCommands = async (
             : classroomCommands.snapshot(),
         })}`,
       },
+      ...(currentView ? [currentView] : []),
     );
     amendments.push(...(options.updates?.() || []));
     if (amendments.length) {
@@ -241,6 +259,7 @@ export const runBoardCommands = async (
     action = parseJSON(
       await chat(conversation, signal, options.settings, {
         maxTokens: options.maxTokens,
+        responseLanguage: options.responseLanguage,
       }),
     ) as BoardAgentAction;
     if (!action || typeof action !== "object") {

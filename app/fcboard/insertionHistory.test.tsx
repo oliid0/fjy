@@ -298,7 +298,7 @@ it("undoes a language translation and its metadata together while preserving the
     .mockResolvedValue(languageStudy.term);
   const chat = vi
     .spyOn(ai, "chat")
-    .mockResolvedValue(JSON.stringify(languageStudy));
+    .mockResolvedValue(languageStudy.translation);
   let release = () => {};
   try {
     await act(async () => {
@@ -322,9 +322,11 @@ it("undoes a language translation and its metadata together while preserving the
     });
     await waitFor(
       () =>
-        expect(readLanguageCard(api, ink.id)?.study.translation).toBe(
-          languageStudy.translation,
-        ),
+        expect(
+          api.getSceneElements().find((element) => element.type === "text"),
+        ).toMatchObject({
+          originalText: languageStudy.translation,
+        }),
       { timeout: 2500 },
     );
     const translated = api
@@ -340,9 +342,7 @@ it("undoes a language translation and its metadata together while preserving the
     expect(api.getSceneElements().map((item) => item.id)).toEqual([ink.id]);
     expect(api.getSceneElements()[0].customData?.fcLanguage).toBeUndefined();
     Keyboard.redo();
-    expect(readLanguageCard(api, ink.id)?.study.translation).toBe(
-      languageStudy.translation,
-    );
+    expect(readLanguageCard(api, ink.id)?.sourceIds).toEqual([ink.id]);
     expect(
       api
         .getSceneElements()

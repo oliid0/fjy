@@ -9,6 +9,7 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { registerCanvasCommands } from "./canvasCommands";
 import { classroomCommands } from "./commands";
+import { currentSettings } from "./settings";
 import { contentViewport, drawPlot, selectedPlot } from "./board";
 import { defaultPlot } from "./math";
 import { shapeInk } from "./documents";
@@ -67,6 +68,155 @@ it.each([0.5, 0.634303, 1, 2])(
     }
   },
 );
+
+it.each(["牛顿第二定律", "Newton"])(
+  "writes editable %s even when an older profile opted into cloud handwriting images",
+  async (text) => {
+    const api = sceneAPI();
+    api.updateScene({ elements: [] });
+    const previous = localStorage.getItem("fcboard-settings");
+    localStorage.setItem(
+      "fcboard-settings",
+      JSON.stringify({
+        speech: "cloud",
+        apiKey: "test-key",
+        handwritingGeneration: "cloud",
+      }),
+    );
+    const network = vi.spyOn(globalThis, "fetch");
+    const stop = registerCanvasCommands(api);
+    try {
+      const receipt = await classroomCommands.execute({
+        name: "canvas.text",
+        args: {
+          text,
+          role: "title",
+          placement: "center",
+          presentation: "handwritten",
+        },
+      });
+      const elements = api.getSceneElements();
+      expect(network).not.toHaveBeenCalled();
+      expect(currentSettings()).not.toHaveProperty("handwritingGeneration");
+      expect(receipt).toEqual({ ids: elements.map((element) => element.id) });
+      expect(elements.length).toBeGreaterThan(0);
+      expect(
+        elements.every(
+          (element) =>
+            element.type === (text === "Newton" ? "freedraw" : "text"),
+        ),
+      ).toBe(true);
+      expect(api.addFiles).not.toHaveBeenCalled();
+    } finally {
+      stop();
+      network.mockRestore();
+      if (previous === null) {
+        localStorage.removeItem("fcboard-settings");
+      } else {
+        localStorage.setItem("fcboard-settings", previous);
+      }
+    }
+  },
+);
+
+it("rewrites a moved and resized handwritten title as one editable group", async () => {
+  const api = sceneAPI();
+  const original = api.getSceneElements()[0];
+  const stop = registerCanvasCommands(api);
+  try {
+    const { ids } = (await classroomCommands.execute({
+      name: "canvas.text",
+      args: {
+        text: "Newton",
+        role: "title",
+        presentation: "handwritten",
+        placement: "center",
+        sourceIds: [],
+      },
+    })) as { ids: string[] };
+    await classroomCommands.execute({
+      name: "canvas.resize",
+      args: { ids, scale: 1.5 },
+    });
+    await classroomCommands.execute({
+      name: "canvas.move",
+      args: { ids, dx: -80, dy: -40 },
+    });
+    const title = api
+      .getSceneElements()
+      .filter((element) => ids.includes(element.id));
+    const [left, top] = getCommonBounds(title);
+    const replacement = (await classroomCommands.execute({
+      name: "canvas.text",
+      args: { id: ids[0], text: "Motion" },
+    })) as { ids: string[] };
+    const scene = api.getSceneElements();
+    const revised = scene.filter((element) =>
+      replacement.ids.includes(element.id),
+    );
+    expect(scene).toHaveLength(1 + replacement.ids.length);
+    expect(scene[0]).toEqual(original);
+    expect(handwritingText(revised)).toEqual(["Motion"]);
+    expect(revised[0].strokeWidth).toBeCloseTo(title[0].strokeWidth);
+    expect(getCommonBounds(revised)[0]).toBeCloseTo(left);
+    expect(getCommonBounds(revised)[1]).toBeCloseTo(top);
+    const view = (await classroomCommands.execute({
+      name: "canvas.inspect",
+    })) as {
+      elements: { id: string; writtenGroup?: string }[];
+    };
+    const group = view.elements.filter((element) => element.writtenGroup);
+    expect(group.map((element) => element.id)).toEqual(replacement.ids);
+    expect(new Set(group.map((element) => element.writtenGroup)).size).toBe(1);
+    const aligned = (await classroomCommands.execute({
+      name: "canvas.align",
+      args: { ids: replacement.ids, horizontal: "center" },
+    })) as { bounds: number[] };
+    const viewport = contentViewport(api);
+    expect((aligned.bounds[0] + aligned.bounds[2]) / 2).toBeCloseTo(
+      (viewport.left + viewport.right) / 2,
+    );
+  } finally {
+    stop();
+  }
+});
+
+it("keeps the line size when a handwritten paragraph is rewritten with more lines", async () => {
+  const api = sceneAPI();
+  const stop = registerCanvasCommands(api);
+  try {
+    const { ids } = (await classroomCommands.execute({
+      name: "canvas.text",
+      args: {
+        text: "Motion\nMotion",
+        presentation: "handwritten",
+        sourceIds: [],
+      },
+    })) as { ids: string[] };
+    const oldStroke = api
+      .getSceneElements()
+      .find((element) => element.id === ids[0]);
+    const edited = "Motion\nMotion\nMotion";
+    const next = (await classroomCommands.execute({
+      name: "canvas.text",
+      args: { id: ids[0], text: edited },
+    })) as { ids: string[] };
+    const group = api
+      .getSceneElements()
+      .filter((element) => next.ids.includes(element.id));
+    expect(handwritingText(group)).toEqual([edited]);
+    const firstStroke = group[0];
+    if (oldStroke?.type !== "freedraw" || firstStroke?.type !== "freedraw") {
+      throw new Error(
+        "Expected editable handwriting before and after the edit",
+      );
+    }
+    expect(firstStroke.strokeWidth).toBeCloseTo(oldStroke.strokeWidth);
+    expect(firstStroke.points[1][1]).toBeCloseTo(oldStroke.points[1][1]);
+  } finally {
+    stop();
+  }
+});
 
 it.each([0.5, 1, 2])(
   "keeps a dictated CJK question inside its physical writing frame at zoom %s",

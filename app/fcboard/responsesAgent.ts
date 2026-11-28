@@ -45,6 +45,9 @@ class FunctionStream {
   private data: string[] = [];
   private items = new Map<number, Item>();
   private response?: Response;
+  private hasFunctionCall = false;
+
+  constructor(private preview?: (delta?: string) => void) {}
 
   private frame() {
     if (!this.data.length) {
@@ -56,12 +59,26 @@ class FunctionStream {
       return;
     }
     const event = JSON.parse(raw);
+    if (
+      (event.type === "response.output_item.added" ||
+        event.type === "response.output_item.done") &&
+      event.item?.type === "function_call"
+    ) {
+      this.hasFunctionCall = true;
+      this.preview?.();
+    }
     if (event.type === "response.output_item.done") {
       if (Number.isInteger(event.output_index) && event.item) {
         this.items.set(event.output_index, event.item);
       }
     } else if (event.type === "response.completed") {
       this.response = event.response;
+    } else if (
+      event.type === "response.output_text.delta" &&
+      !this.hasFunctionCall &&
+      typeof event.delta === "string"
+    ) {
+      this.preview?.(event.delta);
     } else if (
       ["response.failed", "response.incomplete", "error"].includes(event.type)
     ) {
@@ -141,7 +158,10 @@ export const runResponsesAgent = async (options: {
   allowed: (name: string) => boolean;
   updates?: () => string[];
   requireActions?: boolean;
+  verifyToolFailures?: boolean;
   responseLanguage?: AIResponseLanguage;
+  observeAfterTools?: () => Promise<Message>;
+  onTextPreview?: (text: string) => void;
   dispatch?: (
     command: import("./commands").Command,
     signal?: AbortSignal,
@@ -211,7 +231,7 @@ export const runResponsesAgent = async (options: {
   };
   let calls = 0;
   let mutations = 0;
-  const errors = new Set<string>();
+  const errors = new Map<string, unknown>();
   let idle = 0;
   for (let round = 0; round < 12; round++) {
     check();
@@ -230,8 +250,23 @@ export const runResponsesAgent = async (options: {
       90000,
     );
     let response: Response;
+    let caption = "";
+    const preview =
+      options.onTextPreview && !errors.size
+        ? (delta?: string) => {
+            if (delta) {
+              if (!request.signal.aborted && current()) {
+                caption += delta;
+                options.onTextPreview?.(caption);
+              }
+            } else if (caption) {
+              caption = "";
+              options.onTextPreview?.("");
+            }
+          }
+        : undefined;
     try {
-      const stream = new FunctionStream();
+      const stream = new FunctionStream(preview);
       const body = {
         model: settings.model,
         input,
@@ -242,12 +277,13 @@ export const runResponsesAgent = async (options: {
         ...(previous ? { previous_response_id: previous } : {}),
       };
       const result =
-        (await postNativeAgentStep(
-          options.endpoint,
-          settings.apiKey,
-          body,
-          request.signal,
-        )) ||
+        (!options.onTextPreview &&
+          (await postNativeAgentStep(
+            options.endpoint,
+            settings.apiKey,
+            body,
+            request.signal,
+          ))) ||
         (await postAI(
           options.endpoint,
           settings.apiKey,
@@ -281,6 +317,9 @@ export const runResponsesAgent = async (options: {
           response.error?.message || t("fcboard.ai_request_failed"),
         );
       }
+    } catch (failure) {
+      preview?.();
+      throw failure;
     } finally {
       clearTimeout(timer);
       signal.removeEventListener("abort", cancel);
@@ -289,6 +328,9 @@ export const runResponsesAgent = async (options: {
       (item) => item.type === "function_call",
     );
     const updates = options.updates?.();
+    if (functions.length || updates?.length) {
+      preview?.();
+    }
     if (updates?.length) {
       if (!response.id) {
         throw new Error("Missing response id for task update");
@@ -324,7 +366,11 @@ export const runResponsesAgent = async (options: {
       ) {
         return { summary: text, canvas: classroomCommands.read("canvas") };
       }
+      preview?.();
       if (!response.id || ++idle >= 2) {
+        if (options.verifyToolFailures && errors.size) {
+          throw errors.values().next().value;
+        }
         throw new Error(
           text.trim() || t("fcboard.invalid_ai_follow_up_action"),
         );
@@ -393,11 +439,12 @@ export const runResponsesAgent = async (options: {
           classroomCommands.has("canvas.snapshot")
         ) {
           const snapshot = (await executeBoardCommand(
-            { name: "canvas.snapshot" },
+            { name: "canvas.snapshot", args: { screen: true } },
             signal,
           )) as { image?: string };
-          result = snapshot;
-          image = snapshot.image;
+          const { image: captured, ...observation } = snapshot;
+          result = observation;
+          image = captured;
           errors.delete(item.name);
         } else {
           const command = realtimeCommand(item);
@@ -469,7 +516,7 @@ export const runResponsesAgent = async (options: {
         if (failure instanceof DOMException && failure.name === "AbortError") {
           throw failure;
         }
-        errors.add(errorKey);
+        errors.set(errorKey, failure);
         result = {
           ok: false,
           error: failure instanceof Error ? failure.message : String(failure),
@@ -494,6 +541,11 @@ export const runResponsesAgent = async (options: {
           ],
         });
       }
+    }
+    if (options.observeAfterTools) {
+      const observation = await options.observeAfterTools();
+      check();
+      input.push(...inputMessages([observation]));
     }
     amendments.push(...(options.updates?.() || []));
     if (amendments.length) {

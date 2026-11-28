@@ -11,7 +11,12 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 import { withAILanguagePolicy } from "./aiLocale";
 
 import { AIStream, postAI, readAIResult } from "./aiTransport";
-import { currentSettings, defaults, validateEndpoint } from "./settings";
+import {
+  ARK_VISION_MODEL,
+  currentSettings,
+  defaults,
+  validateEndpoint,
+} from "./settings";
 import { handwritingText } from "./handwriting";
 
 import type { AIResponseLanguage } from "./aiLocale";
@@ -40,6 +45,8 @@ export const chat = async (
     onReset?: () => void;
     timeoutMs?: number;
     webSearch?: boolean;
+    useVisionModel?: boolean;
+    quickVision?: boolean;
   } = {},
 ): Promise<string> => {
   const visual = messages.some(
@@ -47,10 +54,9 @@ export const chat = async (
       Array.isArray(message.content) &&
       message.content.some((part) => part.type === "image_url"),
   );
-  const model = (
-    visual ? settings.ocrModel.trim() || settings.model : settings.model
-  ).trim();
-  if (!settings.apiKey || !model) {
+  const hasConfiguredModel =
+    settings.model.trim() || (visual && settings.ocrModel.trim());
+  if (!settings.apiKey || !hasConfiguredModel) {
     throw new Error(
       t(
         "fcboard.set_an_api_key_and_a_vision_model_or_endpoint_id_in_ai_settings",
@@ -60,6 +66,14 @@ export const chat = async (
   const url = validateEndpoint(settings.endpoint);
   const responses = new URL(url).pathname.endsWith("/responses");
   const ark = new URL(url).hostname === "ark.cn-beijing.volces.com";
+  const model = (
+    visual
+      ? settings.ocrModel.trim() ||
+        (options.useVisionModel && ark && settings.model === defaults.model
+          ? ARK_VISION_MODEL
+          : settings.model)
+      : settings.model
+  ).trim();
   const streaming =
     !Capacitor.isNativePlatform() ||
     Capacitor.isPluginAvailable("FcboardClassroom");
@@ -88,6 +102,12 @@ export const chat = async (
         }
       : { messages: localizedMessages }),
     stream: streaming,
+    ...(options.quickVision &&
+    visual &&
+    ark &&
+    [ARK_VISION_MODEL, defaults.model].includes(model)
+      ? { thinking: { type: "disabled" } }
+      : {}),
     ...(options.webSearch
       ? responses
         ? { tools: [{ type: "web_search" }] }

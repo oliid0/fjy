@@ -9,7 +9,12 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
 import { PageNavigation } from "./PageNavigation";
-import { classroomCommands } from "./commands";
+import {
+  classroomCommands,
+  directCommand,
+  executeBoardCommand,
+} from "./commands";
+import { voiceBoardCommand } from "./boardAgents";
 
 const press = (key: string, target: EventTarget = window, options = {}) => {
   const event = new KeyboardEvent("keydown", {
@@ -200,5 +205,41 @@ it("waits for an in-flight page change and shows an actual write error instead o
     navigation.unmount();
     stop();
     context();
+  }
+});
+
+it("routes the spoken next and previous commands to the mounted board order when courseware is closed", async () => {
+  let active = "first";
+  const release = classroomCommands.context("boards", () => ({
+    active,
+    boards: [{ id: "first" }, { id: "second" }],
+  }));
+  const switchBoard = vi.fn((args) => {
+    active = args.id;
+  });
+  const stop = classroomCommands.register(
+    "board.switch",
+    "Actual switch",
+    switchBoard,
+  );
+  const navigation = render(<PageNavigation />);
+  const say = (text: string) =>
+    executeBoardCommand(
+      voiceBoardCommand(directCommand(text)!),
+      new AbortController().signal,
+    );
+  try {
+    expect(await say("下一页")).toEqual({ changed: true, active: "second" });
+    expect(await say("下一页白板")).toEqual({
+      changed: false,
+      boundary: "last",
+      active: "second",
+    });
+    expect(await say("上一页白板")).toEqual({ changed: true, active: "first" });
+    expect(switchBoard).toHaveBeenCalledTimes(2);
+  } finally {
+    navigation.unmount();
+    stop();
+    release();
   }
 });

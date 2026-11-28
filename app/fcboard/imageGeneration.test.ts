@@ -9,8 +9,10 @@ import {
   insertImageResult,
 } from "./imageGeneration";
 import { sceneAPI } from "./test/scene";
+import { registerCanvasCommands } from "./canvasCommands";
 import { selectionSignature } from "./selection";
 import { classroomCommands } from "./commands";
+import { realtimeCommand } from "./realtimeTools";
 import { defaults, saveSettings } from "./settings";
 
 vi.mock("@capacitor/core", async (original) => ({
@@ -140,6 +142,52 @@ it("inserts a successful custom-model generation without unsupported decompositi
   expect(api.getSceneElements()).toHaveLength(1);
   expect(api.getSceneElements()[0].type).toBe("image");
   expect(api.addFiles).toHaveBeenCalledTimes(1);
+});
+
+it("generates an explicitly requested illustration through the real command and returns its committed ID", async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test", imageModel: "image-test" },
+    false,
+  );
+  const fetcher = vi.fn().mockResolvedValue({
+    status: 200,
+    json: async () => ({ data: [{ b64_json: image }] }),
+  });
+  vi.stubGlobal("fetch", fetcher);
+  vi.stubGlobal(
+    "Image",
+    class {
+      src = "";
+      naturalWidth = 100;
+      naturalHeight = 80;
+      decode = async () => {};
+    },
+  );
+  const api = sceneAPI();
+  const stop = registerCanvasCommands(api);
+  try {
+    const receipt = await classroomCommands.execute(
+      realtimeCommand({
+        name: "board_image",
+        arguments: JSON.stringify({
+          prompt: "一张月球照片",
+          transparent: true,
+        }),
+      }),
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({
+      prompt: expect.stringContaining("一张月球照片"),
+      background: "transparent",
+    });
+    const inserted = api
+      .getSceneElements()
+      .filter((element) => element.type === "image");
+    expect(inserted).toHaveLength(1);
+    expect(receipt).toEqual({ ids: [inserted[0].id] });
+  } finally {
+    stop();
+  }
 });
 
 it("does not import a late generated image after cancellation", async () => {

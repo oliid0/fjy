@@ -15,7 +15,7 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import type { FcboardElement, FileId } from "@fcboard/element/types";
 
-import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { project3D, samplePlot, sampleInequality } from "./math";
 import { classroomCommands } from "./commands";
@@ -349,10 +349,18 @@ export const insertText = (
       : inkSource
       ? FONT_FAMILY.Excalifont
       : state.currentItemFontFamily || FONT_FAMILY.Helvetica;
+  const writtenHeight = inkSource?.customData?.fcWrittenHeight;
   const size =
     placement.mode === "replace" && inkSource && bounds
-      ? Math.max(1, bounds.bottom - bounds.top) /
-        (Math.max(1, text.split("\n").length) * getLineHeight(fontFamily))
+      ? inkSource.customData?.fcWrittenGroup && styleSource
+        ? (typeof writtenHeight === "number" &&
+          Number.isFinite(writtenHeight) &&
+          writtenHeight > 0
+            ? writtenHeight
+            : inkLineHeight(styleSource, 1 / state.zoom.value)) /
+          (inkOutput ? 1.25 : getLineHeight(fontFamily))
+        : Math.max(1, bounds.bottom - bounds.top) /
+          (Math.max(1, text.split("\n").length) * getLineHeight(fontFamily))
       : answerFontSize(
           sourceSize * (inkSource ? 0.9 : 1),
           state.zoom.value,
@@ -637,6 +645,7 @@ export const drawPlot = (
   keepTool = false,
   sourceBounds?: ContentRect,
   sourceIds?: readonly string[],
+  preview?: DataURL,
 ) => {
   if (!plot.surface && !plot.relation) {
     const color = functionColors[0];
@@ -663,6 +672,7 @@ export const drawPlot = (
       sourceBounds,
       true,
       sourceIds,
+      preview,
     );
   }
   const lines = samplePlot(plot);
@@ -829,6 +839,7 @@ const insertPlot = (
   sourceBounds?: ContentRect,
   raster = false,
   sourceIds?: readonly string[],
+  preview?: DataURL,
 ) => {
   const documentLayout = classroomCommands.read("document.layout") as
     | {
@@ -878,7 +889,8 @@ const insertPlot = (
   const first = shapes[0];
   const image =
     raster && first.type === "image"
-      ? functionGraphImage(plot, first.strokeColor, {
+      ? preview ||
+        functionGraphImage(plot, first.strokeColor, {
           width: first.strokeWidth,
           scale: (first.width || plotSize.width) / plotSize.width,
         })

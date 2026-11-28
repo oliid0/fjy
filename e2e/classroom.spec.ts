@@ -190,7 +190,6 @@ for (const viewport of [
       ...[
         ["mathTranscription", "数学转录回退"],
         ["translationProvider", "翻译方式"],
-        ["handwritingGeneration", "文字转手写体"],
       ].map(
         ([key, label]) =>
           [

@@ -572,3 +572,46 @@ it("closes share UI immediately while native cleanup is pending and preserves a 
     cleanup();
   }
 });
+
+it.each([
+  ["pdf", true],
+  ["jpg", false],
+] as const)(
+  "saves only the active page as %s and returns the picker outcome",
+  async (format, saved) => {
+    const size = { width: 800, height: 450, pixelRatio: 1 };
+    const release = classroomCommands.register(
+      "board.pages",
+      "@internal",
+      () => ({
+        active: "second",
+        canvasSize: size,
+        boards: [
+          { id: "first", name: "First", elements: [], files: {}, view: {} },
+          { id: "second", name: "Second", elements: [], files: {}, view: {} },
+        ],
+      }),
+    );
+    const save = vi.spyOn(boardFiles, "savePageFiles").mockResolvedValue(saved);
+    const view = render(<BoardShare />);
+    try {
+      const signal = new AbortController().signal;
+      expect(
+        await classroomCommands.execute({
+          name: "board.saveFile",
+          args: { format, signal },
+        }),
+      ).toEqual({ saved, cancelled: !saved, format, id: "second" });
+      expect(save).toHaveBeenCalledWith(
+        [{ page: 1, blob: expect.any(Function) }],
+        "Second",
+        format,
+        signal,
+      );
+      expect(screen.queryByRole("dialog")).toBeNull();
+    } finally {
+      view.unmount();
+      release();
+    }
+  },
+);

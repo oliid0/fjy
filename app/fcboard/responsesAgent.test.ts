@@ -184,6 +184,66 @@ it("waits for a completed streaming response before executing split function arg
   }
 });
 
+it("streams answer captions through the same transport and clears preamble when a function call arrives", async () => {
+  const caption = vi.fn();
+  const nativeStep = vi.spyOn(transport, "postNativeAgentStep");
+  const ink = vi.fn(() => ({ ids: ["stroke"] }));
+  const stop = classroomCommands.register("canvas.ink", "Write ink", ink);
+  let step = 0;
+  vi.spyOn(transport, "postAI").mockImplementation(
+    async (_url, _key, _body, _signal, chunk) => {
+      const event = (packet: object) =>
+        chunk(`data: ${JSON.stringify(packet)}\n\n`);
+      if (++step === 1) {
+        event({ type: "response.output_text.delta", delta: "正在处理" });
+        expect(caption).toHaveBeenLastCalledWith("正在处理");
+        const tool = call("ink");
+        event({
+          type: "response.output_item.added",
+          output_index: 1,
+          item: tool,
+        });
+        expect(caption).toHaveBeenLastCalledWith("");
+        event({ type: "response.output_text.delta", delta: "尚未核验的输出" });
+        event({
+          type: "response.output_item.done",
+          output_index: 1,
+          item: tool,
+        });
+        expect(ink).not.toHaveBeenCalled();
+        event({
+          type: "response.completed",
+          response: { id: "tool-turn", status: "completed" },
+        });
+      } else {
+        expect(ink).toHaveBeenCalledTimes(1);
+        event({ type: "response.output_text.delta", delta: "已完成" });
+        event({ type: "response.output_text.delta", delta: "真实板书。" });
+        expect(caption).toHaveBeenLastCalledWith("已完成真实板书。");
+        event({
+          type: "response.completed",
+          response: { id: "spoken", status: "completed", output: [done] },
+        });
+      }
+      return { status: 200, stream: true, data: "" };
+    },
+  );
+  try {
+    await expect(
+      runResponsesAgent({ ...options(), onTextPreview: caption }),
+    ).resolves.toMatchObject({ summary: "已完成真实板书。" });
+    expect(nativeStep).not.toHaveBeenCalled();
+    expect(caption.mock.calls.flat()).toEqual([
+      "正在处理",
+      "",
+      "已完成",
+      "已完成真实板书。",
+    ]);
+  } finally {
+    stop();
+  }
+});
+
 it("keeps a failed move unresolved when a different board_command mutation succeeds", async () => {
   const api = sceneAPI();
   const stop = registerCanvasCommands(api);

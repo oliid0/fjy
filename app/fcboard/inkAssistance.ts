@@ -41,6 +41,7 @@ import {
 } from "./insertionWriting";
 import { insertionLabelParts } from "./insertionLabels";
 import {
+  calculationAnswerText,
   inkAssistMode,
   inkRecognitionDelay,
   recognizeInkContent,
@@ -344,14 +345,14 @@ export const observeInkAssistance = (
             source.forEach((element) => seen.add(element.id));
             insertText(
               api,
-              result.study.translation,
+              result.translation,
               undefined,
               { fcLanguage: { group, source: false } },
               source,
               "text",
               {
                 mode: "below",
-                sourceLines: result.text.split("\n").length,
+                sourceLines: result.text?.split("\n").length,
                 groupId: group,
                 sourceUpdates: source.map((element, index) => ({
                   id: element.id,
@@ -365,13 +366,13 @@ export const observeInkAssistance = (
             return;
           }
           if (result.kind === "function" || result.kind === "calculation") {
-            const text = result.text;
             if (result.kind === "function") {
               await classroomCommands.execute({
                 name: "math.plot",
                 args: {
                   ...result.plot,
                   quiet: true,
+                  useVega: result.cloud === true,
                   sourceIds: source.map((element) => element.id),
                   sourceSignature: signature,
                   signal: request.signal,
@@ -380,20 +381,15 @@ export const observeInkAssistance = (
             } else {
               insertText(
                 api,
-                `${
-                  result.layout ||
-                  /=\s*$/.test(text) ||
-                  /^[xyz] =/.test(result.answer)
-                    ? ""
-                    : "= "
-                }${result.answer}`,
+                calculationAnswerText(result),
                 undefined,
                 { fcSelectionSource: signature },
                 source,
                 "match",
                 {
                   mode: result.layout?.mode || "inline",
-                  sourceLines: result.layout?.lines || text.split("\n").length,
+                  sourceLines:
+                    result.layout?.lines || result.text?.split("\n").length,
                 },
               );
             }

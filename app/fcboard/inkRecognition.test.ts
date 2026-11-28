@@ -1,7 +1,7 @@
 import * as i18n from "@fcboard/fcboard/i18n";
 
 import * as ai from "./ai";
-import { recognizeInkContent } from "./inkRecognition";
+import { calculationAnswerText, recognizeInkContent } from "./inkRecognition";
 import { defaults, saveSettings } from "./settings";
 import { languageStudy } from "./test/language";
 import * as ocr from "./ocr";
@@ -83,7 +83,7 @@ it("sends cloud language ink directly as one cropped image request without OCR",
   const recognize = vi
     .spyOn(ocr, "recognizeHandwriting")
     .mockResolvedValue("Bonjour");
-  const model = vi.spyOn(ai, "chat").mockResolvedValue(JSON.stringify(study));
+  const model = vi.spyOn(ai, "chat").mockResolvedValue(study.translation);
   const result = await recognizeInkContent(
     "language",
     async () => "data:image/png;base64,word",
@@ -97,12 +97,7 @@ it("sends cloud language ink directly as one cropped image request without OCR",
   );
   expect(result).toMatchObject({
     kind: "language",
-    text: "Bonjour",
-    study: {
-      term: "Bonjour",
-      translation: study.translation,
-      backend: "translation",
-    },
+    translation: study.translation,
   });
   expect(recognize).not.toHaveBeenCalled();
   expect(model).toHaveBeenCalledTimes(1);
@@ -234,7 +229,7 @@ it.each([
   ["es-ES", "zh", "今天是晴天。", "Hoy hace sol.", "es-ES"],
 ])(
   "translates multilingual handwriting into UI target %s in one cloud image call",
-  async (code, language, term, translation, targetLanguage) => {
+  async (code, _language, _term, translation, targetLanguage) => {
     vi.spyOn(i18n, "getLanguage").mockReturnValue({
       ...i18n.getLanguage(),
       code,
@@ -244,9 +239,7 @@ it.each([
       false,
     );
     const recognize = vi.spyOn(ocr, "recognizeHandwriting");
-    const model = vi
-      .spyOn(ai, "chat")
-      .mockResolvedValue(JSON.stringify({ language, term, translation }));
+    const model = vi.spyOn(ai, "chat").mockResolvedValue(translation);
     const result = await recognizeInkContent(
       "language",
       async () => "data:image/png;base64,sentence",
@@ -255,9 +248,8 @@ it.each([
     );
     expect(result).toMatchObject({
       kind: "language",
-      text: term,
       targetLanguage,
-      study: { translation },
+      translation,
     });
     expect(model).toHaveBeenCalledTimes(1);
     expect(recognize).not.toHaveBeenCalled();
@@ -269,5 +261,130 @@ it.each([
         }),
       ]),
     );
+  },
+);
+
+it("passes handwritten LaTeX to the existing plot parser without a local OCR candidate", async () => {
+  saveSettings(
+    { ...defaults, mathTranscription: "cloud", apiKey: "configured" },
+    false,
+  );
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  const model = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValue(String.raw`y=\frac{x^2}{2}`);
+  const result = await recognizeInkContent(
+    "function",
+    async () => "data:image/png;base64,function",
+    [],
+    new AbortController().signal,
+  );
+  expect(result).toMatchObject({
+    kind: "function",
+    plot: { expression: "((x^2)/(2))" },
+  });
+  expect(recognize).not.toHaveBeenCalled();
+  expect(JSON.stringify(model.mock.calls[0][0])).toContain(
+    "data:image/png;base64,function",
+  );
+});
+
+it.each([
+  [
+    [
+      [
+        [0, 0],
+        [0, 30],
+      ],
+      [
+        [12, 15],
+        [24, 15],
+      ],
+      [
+        [18, 9],
+        [18, 21],
+      ],
+      [
+        [35, 0],
+        [35, 30],
+      ],
+      [
+        [46, 10],
+        [62, 10],
+      ],
+      [
+        [46, 18],
+        [62, 18],
+      ],
+    ],
+    undefined,
+  ],
+  [
+    [
+      [
+        [22, 0],
+        [22, 19],
+      ],
+      [
+        [22, 28],
+        [22, 47],
+      ],
+      [
+        [1, 37],
+        [12, 37],
+      ],
+      [
+        [7, 31],
+        [7, 43],
+      ],
+      [
+        [1, 52],
+        [34, 52],
+      ],
+    ],
+    { mode: "column", lines: 2 },
+  ],
+] as const)(
+  "places the cloud answer at the written completion mark",
+  async (strokes, layout) => {
+    saveSettings(
+      { ...defaults, mathTranscription: "cloud", apiKey: "configured" },
+      false,
+    );
+    const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+    const calculate = vi.spyOn(computation, "calculateAsync");
+    vi.spyOn(ai, "chat").mockResolvedValue("2");
+    const result = await recognizeInkContent(
+      "calculation",
+      async () => "data:image/png;base64,calculation",
+      strokes.map((stroke) => stroke.map(([x, y]) => [x, y])),
+      new AbortController().signal,
+    );
+    if (result.kind !== "calculation") {
+      throw new Error("Expected a calculation");
+    }
+    expect(result.layout).toEqual(layout);
+    expect(calculationAnswerText(result)).toBe("2");
+    expect(recognize).not.toHaveBeenCalled();
+    expect(calculate).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["The answer is 2.", "1+1=2", "∅"])(
+  "rejects a cloud calculation response without a standalone result (%s)",
+  async (response) => {
+    saveSettings(
+      { ...defaults, mathTranscription: "cloud", apiKey: "configured" },
+      false,
+    );
+    vi.spyOn(ai, "chat").mockResolvedValue(response);
+    await expect(
+      recognizeInkContent(
+        "calculation",
+        async () => "data:image/png;base64,calculation",
+        [],
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
   },
 );

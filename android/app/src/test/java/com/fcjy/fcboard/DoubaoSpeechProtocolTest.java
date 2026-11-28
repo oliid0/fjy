@@ -10,7 +10,7 @@ import static org.junit.Assert.*;
 
 public class DoubaoSpeechProtocolTest {
     @Test public void pcmConfigurationAndSignedGzipFramesMatchTheDocumentedProtocol() throws Exception {
-        byte[] config = DoubaoSpeechProtocol.configuration();
+        byte[] config = DoubaoSpeechProtocol.configuration(false);
         JSONObject request = new JSONObject(new String(config, StandardCharsets.UTF_8));
         assertEquals(16000, request.getJSONObject("audio").getInt("rate"));
         assertTrue(request.getJSONObject("request").getBoolean("enable_nonstream"));
@@ -44,6 +44,19 @@ public class DoubaoSpeechProtocolTest {
         body.getJSONObject("result").getJSONArray("utterances").put(second);
         JSONArray next = decoder.lines(body);
         assertEquals(1, next.length()); assertEquals(2, next.getJSONObject(0).getDouble("time"), 0);
+    }
+
+    @Test public void separatesAndRetainsSpeakersOnlyFromDiarizedUtterances() throws Exception {
+        JSONObject config = new JSONObject(new String(DoubaoSpeechProtocol.configuration(true), StandardCharsets.UTF_8));
+        assertTrue(config.getJSONObject("request").getBoolean("enable_speaker_info"));
+        JSONObject first = new JSONObject().put("text", "开始").put("start_time", 0).put("end_time", 300)
+            .put("definite", true).put("additions", new JSONObject().put("speaker_id", "0"));
+        JSONObject second = new JSONObject(first.toString()).put("text", "同意").put("start_time", 300).put("end_time", 550)
+            .put("additions", new JSONObject().put("speaker_id", "1"));
+        JSONArray lines = new DoubaoSpeechProtocol().lines(new JSONObject().put("result",
+            new JSONObject().put("utterances", new JSONArray().put(first).put(second))));
+        assertEquals("0", lines.getJSONObject(0).getString("speaker"));
+        assertEquals("1", lines.getJSONObject(1).getString("speaker"));
     }
 
     @Test public void errorFramesAndInvalidCompressionCannotBecomeCommands() throws Exception {

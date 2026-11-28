@@ -299,6 +299,43 @@ export const executeBoardCommand = (command: Command, signal?: AbortSignal) => {
   });
 };
 
+/** Some controls report their terminal state without throwing for manual callers. */
+export const verifyBoardCommandResult = (command: Command, result: unknown) => {
+  const receipt = result as
+    | {
+        cancelled?: boolean;
+        changed?: boolean;
+        boundary?: string;
+        phase?: string;
+        error?: Parameters<typeof t>[0];
+      }
+    | undefined;
+  if (receipt?.cancelled === true) {
+    throw new DOMException("Board operation cancelled", "AbortError");
+  }
+  if (
+    ["board.step", "document.next", "document.previous"].includes(
+      command.name,
+    ) &&
+    receipt?.changed === false
+  ) {
+    throw new Error(
+      t(
+        receipt.boundary === "last"
+          ? "fcboard.last_page_reached"
+          : receipt.boundary === "first"
+          ? "fcboard.first_page_reached"
+          : "fcboard.command_unavailable_command",
+        { command: command.name },
+      ),
+    );
+  }
+  if (command.name === "projection.start" && receipt?.phase === "error") {
+    throw new Error(t(receipt.error || "projection.connectionError"));
+  }
+  return result;
+};
+
 /** Validate the entire target set before an agent command changes any object. */
 export const commandObjectIds = (
   input: unknown,

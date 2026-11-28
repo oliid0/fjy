@@ -107,10 +107,24 @@
       }
     },
     {
-      "patterns": ["^(?:请|帮我)?(?:开始|开启|打开)?录制$", "^(?:please)?(?:start|begin|open)?recording$"],
+      "patterns": ["^(?:请|帮我)?(?:开始|开启)录制$", "^(?:please)?(?:start|begin)recording$"],
       "compact": true,
       "command": {
         "name": "record.start"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:打开|查看)?录制$", "^(?:please)?(?:open|show|view)?(?:the)?recording(?:panel)?$"],
+      "compact": true,
+      "command": {
+        "name": "record.open"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?关闭录制(?:面板)?$", "^(?:please)?close(?:the)?recording(?:panel)?$"],
+      "compact": true,
+      "command": {
+        "name": "record.close"
       }
     },
     {
@@ -260,6 +274,22 @@
       "compact": true,
       "command": {
         "name": "board.new"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:下一页|下一张|下一块)白板$", "^(?:please)?next(?:whiteboard|board)$"],
+      "compact": true,
+      "command": {
+        "name": "board.step",
+        "args": { "direction": "next" }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:上一页|上一张|上一块)白板$", "^(?:please)?previous(?:whiteboard|board)$"],
+      "compact": true,
+      "command": {
+        "name": "board.step",
+        "args": { "direction": "previous" }
       }
     },
     {

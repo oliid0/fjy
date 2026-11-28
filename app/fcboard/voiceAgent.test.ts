@@ -1,3 +1,5 @@
+import { t } from "@fcboard/fcboard/i18n";
+
 import * as ai from "./ai";
 import * as transport from "./aiTransport";
 import { classroomCommands } from "./commands";
@@ -294,3 +296,296 @@ it.each(["chat", "responses"])(
     }
   },
 );
+
+it("sends the current courseware screenshot and text with the cloud utterance", async () => {
+  saveSettings(
+    {
+      ...defaults,
+      speech: "cloud",
+      apiKey: "configured",
+      ocrModel: "configured-vision",
+    },
+    false,
+  );
+  const visible = vi.fn().mockResolvedValue({
+    name: "physics.pptx",
+    page: 2,
+    text: "F=ma",
+    image: "data:image/jpeg;base64,current-window",
+  });
+  const release = classroomCommands.register(
+    "canvas.snapshot",
+    "@internal",
+    visible,
+  );
+  const post = vi.spyOn(transport, "postAI").mockResolvedValue({
+    status: 200,
+    stream: false,
+    data: JSON.stringify({
+      id: "observed",
+      status: "completed",
+      output: [
+        {
+          type: "message",
+          content: [{ type: "output_text", text: "力等于质量乘以加速度。" }],
+        },
+      ],
+    }),
+  });
+  try {
+    expect(
+      await runVoiceAgent("解释这一页", [], new AbortController().signal),
+    ).toBe("力等于质量乘以加速度。");
+    expect(visible).toHaveBeenCalledWith(
+      expect.objectContaining({
+        screen: true,
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    const request = post.mock.calls[0][2];
+    expect(request.model).toBe("configured-vision");
+    expect(JSON.stringify(request.input)).toContain(
+      "data:image/jpeg;base64,current-window",
+    );
+    expect(JSON.stringify(request.input)).toContain("F=ma");
+  } finally {
+    release();
+  }
+});
+
+it.each(["chat", "responses"])(
+  "refreshes the visible screenshot after its own page change using %s",
+  async (provider) => {
+    saveSettings(
+      {
+        ...defaults,
+        endpoint:
+          provider === "responses"
+            ? defaults.endpoint
+            : "https://example.com/v1/chat/completions",
+        apiKey: "configured",
+        speech: "cloud",
+      },
+      false,
+    );
+    let page = 1;
+    const capture = vi.fn(() => ({
+      name: "lesson.pdf",
+      page,
+      text: page === 1 ? "旧页面" : "当前页面",
+      image: `data:image/png;base64,page${page}`,
+    }));
+    const next = vi.fn((args: Record<string, unknown>) => {
+      page++;
+      classroomCommands.touch(args.signal as AbortSignal);
+      return { page };
+    });
+    const release = [
+      classroomCommands.register("canvas.snapshot", "@internal", capture),
+      classroomCommands.register("document.next", "Next page", next),
+      classroomCommands.context("document", () => ({ id: "lesson", page })),
+    ];
+    const command = { name: "document.next" };
+    const state = (id: string, output: unknown[]) => ({
+      status: 200,
+      stream: false,
+      data: JSON.stringify({ id, status: "completed", output }),
+    });
+    const chat = vi.spyOn(ai, "chat");
+    const post = vi.spyOn(transport, "postAI");
+    if (provider === "chat") {
+      chat
+        .mockResolvedValueOnce(
+          JSON.stringify({ action: "commands", commands: [command] }),
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({ action: "text", text: "第二页" }),
+        );
+    } else {
+      post
+        .mockResolvedValueOnce(
+          state("turn1", [
+            {
+              type: "function_call",
+              name: "board_command",
+              call_id: "go",
+              arguments: JSON.stringify(command),
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(
+          state("turn2", [
+            {
+              type: "message",
+              content: [{ type: "output_text", text: "第二页" }],
+            },
+          ]),
+        );
+    }
+    try {
+      expect(
+        await runVoiceAgent(
+          "翻页并解释新页面",
+          [],
+          new AbortController().signal,
+        ),
+      ).toBe("第二页");
+      const request =
+        provider === "chat"
+          ? chat.mock.calls[1][0].at(-1)
+          : post.mock.calls[1][2].input;
+      expect(JSON.stringify(request)).toContain("base64,page2");
+      expect(JSON.stringify(request)).toContain("当前页面");
+      expect(capture).toHaveBeenCalledTimes(2);
+      expect(next).toHaveBeenCalledTimes(1);
+    } finally {
+      release.forEach((stop) => stop());
+    }
+  },
+);
+
+it("refreshes a same-page drawing once and keeps the new image for read-only tools", async () => {
+  saveSettings(
+    {
+      ...defaults,
+      endpoint: "https://example.com/v1/chat/completions",
+      speech: "cloud",
+      apiKey: "configured",
+    },
+    false,
+  );
+  let state = "empty";
+  const capture = vi.fn(() => ({ image: `data:image/png;base64,${state}` }));
+  const release = [
+    classroomCommands.context("canvas", () => ({ state })),
+    classroomCommands.register("canvas.snapshot", "@internal", capture),
+    classroomCommands.register("canvas.ink", "Draw ink", () => {
+      state = "triangle";
+      return { ids: ["shape"] };
+    }),
+    classroomCommands.register("canvas.inspect", "Inspect board", () => ({
+      state,
+    })),
+  ];
+  const model = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        action: "commands",
+        commands: [{ name: "canvas.ink" }],
+      }),
+    )
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        action: "commands",
+        commands: [{ name: "canvas.inspect" }],
+      }),
+    )
+    .mockResolvedValueOnce(JSON.stringify({ action: "text", text: "三角形" }));
+  try {
+    expect(
+      await runVoiceAgent("画完再看一下", [], new AbortController().signal),
+    ).toBe("三角形");
+    expect(capture).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(model.mock.calls[2][0])).toContain("base64,triangle");
+    expect(JSON.stringify(model.mock.calls[2][0].at(-1))).not.toContain(
+      "base64,",
+    );
+  } finally {
+    release.forEach((stop) => stop());
+  }
+});
+
+it.each(["chat", "responses"])(
+  "uses the real page boundary instead of the model's false completion in %s",
+  async (provider) => {
+    saveSettings(
+      {
+        ...defaults,
+        apiKey: "configured",
+        speech: "cloud",
+        endpoint:
+          provider === "responses"
+            ? defaults.endpoint
+            : "https://example.com/v1/chat/completions",
+      },
+      false,
+    );
+    const receipt = vi.fn(() => ({
+      changed: false,
+      boundary: "last",
+      active: "final",
+    }));
+    const stop = classroomCommands.register(
+      "board.step",
+      "Turn the board page",
+      receipt,
+    );
+    const command = { name: "board.step", args: { direction: "next" } };
+    const summary = "已经翻到下一页";
+    if (provider === "chat") {
+      vi.spyOn(ai, "chat")
+        .mockResolvedValueOnce(
+          JSON.stringify({ action: "commands", commands: [command] }),
+        )
+        .mockResolvedValue(JSON.stringify({ action: "text", text: summary }));
+    } else {
+      const reply = (id: string, output: unknown[]) => ({
+        status: 200,
+        stream: false,
+        data: JSON.stringify({ id, status: "completed", output }),
+      });
+      vi.spyOn(transport, "postAI")
+        .mockResolvedValueOnce(
+          reply("turn", [
+            {
+              type: "function_call",
+              name: "board_command",
+              call_id: "turn",
+              arguments: JSON.stringify(command),
+            },
+          ]),
+        )
+        .mockResolvedValue(
+          reply("final", [
+            {
+              type: "message",
+              content: [{ type: "output_text", text: summary }],
+            },
+          ]),
+        );
+    }
+    try {
+      await expect(
+        runVoiceAgent("请翻到后面的白板", [], new AbortController().signal),
+      ).rejects.toThrow(t("fcboard.last_page_reached"));
+      expect(receipt).toHaveBeenCalledTimes(1);
+    } finally {
+      stop();
+    }
+  },
+);
+
+it("drops cloud tool output if a manual switch occurs while the original image is in flight", async () => {
+  saveSettings({ ...defaults, apiKey: "configured", speech: "cloud" }, false);
+  let done!: () => void;
+  const release = classroomCommands.register(
+    "canvas.snapshot",
+    "@internal",
+    () =>
+      new Promise((resolve) => {
+        done = () => resolve({ image: "data:image/png;base64,old" });
+      }),
+  );
+  const post = vi.spyOn(transport, "postAI");
+  try {
+    const task = runVoiceAgent("解释这页", [], new AbortController().signal);
+    const rejected = expect(task).rejects.toMatchObject({ name: "AbortError" });
+    classroomCommands.invalidate();
+    done();
+    await rejected;
+    expect(post).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+});

@@ -11,7 +11,11 @@ import {
 } from "react";
 import { CaptureUpdateAction, getCommonBounds } from "@fcboard/element";
 
-import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
+import type {
+  DataURL,
+  FcboardImperativeAPI,
+  UIOptions,
+} from "@fcboard/fcboard/types";
 
 import { QRCode } from "../share/QRCode";
 import { LanguageList } from "../app-language/LanguageList";
@@ -71,6 +75,7 @@ import {
   classroomCommands,
   directCommand,
   executeBoardCommand,
+  verifyBoardCommandResult,
 } from "./commands";
 import {
   documentStrokeBounds,
@@ -95,6 +100,7 @@ import {
   visualizationRequest,
 } from "./intent";
 import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
+import { vegaFunctionImage } from "./vegaFunctionGraph";
 import { defaultPlot, plotExpression } from "./math";
 import { mathNotation } from "./mathNotation";
 import { calculateAsync } from "./mathComputation";
@@ -135,7 +141,7 @@ import { recognizeHandwriting } from "./ocr";
 import { trimLocalInference } from "./localInferenceQueue";
 import { boardInk, clipInk } from "./digitalInk";
 import { placePanel, useAnchoredPanel } from "./floating";
-import { startSystemSpeech, transcribe } from "./speech";
+import { startSystemSpeech, transcribe, transcriptText } from "./speech";
 import { createVoiceTurns } from "./voiceTurns";
 import { runVoiceAgent } from "./voiceAgent";
 
@@ -259,6 +265,9 @@ export const Classroom = ({
   const voiceConversation = useRef<Message[]>([]);
   const stopSpeech = useRef<(() => void) | null>(null);
   const localSpeech = useRef<LocalSpeechHandle | null>(null);
+  const duplexRecordingSpeech = useRef<LocalSpeechHandle | null>(null);
+  const recordingSpeakers = useRef(new Map<string, string>());
+  const recordUsesCloud = useRef(false);
   const duplexSpeech = useRef<DuplexSpeechHandle | null>(null);
   const agentSpeaker = useRef<((text: string) => Promise<void>) | null>(null);
   const duplexOpening = useRef<Promise<void> | null>(null);
@@ -698,6 +707,7 @@ export const Classroom = ({
       narrator.current?.stop();
       stopSpeech.current?.();
       void localSpeech.current?.cancel().catch(() => {});
+      void duplexRecordingSpeech.current?.cancel().catch(() => {});
       recorder.current?.dispose();
       if (voiceRecorder.current?.state === "recording") {
         voiceRecorder.current.stop();
@@ -1165,6 +1175,7 @@ export const Classroom = ({
       sourceSignature?: string,
       quiet = false,
       sourceIds: string[] = [],
+      preview?: DataURL,
     ) => {
       if (replace) {
         const updated = updateFunctionGraph(api, next);
@@ -1241,6 +1252,7 @@ export const Classroom = ({
             }
           : undefined,
         sourceIds,
+        preview,
       );
       const stored = api
         .getSceneElements()
@@ -1350,6 +1362,7 @@ export const Classroom = ({
       return;
     }
     setOutput(result);
+    return { summary: result };
   }, [api]);
 
   const execute = useCallback(
@@ -1612,11 +1625,15 @@ Tools and controls depend on the current interface; open the relevant surface be
     setVoiceCaption(text);
     const direct = directCommand(text);
     if (direct) {
-      const routed = voiceBoardCommand(direct);
-      await executeBoardCommand(
+      const routed =
+        direct.name === "record.start" ? direct : voiceBoardCommand(direct);
+      const result = await executeBoardCommand(
         routed,
         routed.name === "agent.start" ? taskSignal : signal,
       );
+      if (currentSettings().speech !== "local") {
+        verifyBoardCommandResult(routed, result);
+      }
       return;
     }
     if (localMathIntent(text)) {
@@ -1626,13 +1643,22 @@ Tools and controls depend on the current interface; open the relevant surface be
     activeVoice.current = signal;
     setVoiceState("thinking");
     setVoiceCaption(text);
+    const generation = assistantGeneration.current;
     const result = runVoiceAgent(
       text,
       voiceConversation.current,
       signal,
       taskSignal,
+      (caption) => {
+        if (
+          !signal.aborted &&
+          activeVoice.current === signal &&
+          generation === assistantGeneration.current
+        ) {
+          setVoiceCaption(caption || text);
+        }
+      },
     );
-    const generation = assistantGeneration.current;
     try {
       const reply = await result;
       if (!signal.aborted && generation === assistantGeneration.current) {
@@ -1675,7 +1701,30 @@ Tools and controls depend on the current interface; open the relevant surface be
     const turns = createVoiceTurns(
       async (text, signal) => {
         narrator.current?.stop();
-        await voiceExecute.current?.(text, signal, taskScope.signal);
+        if (currentSettings().speech === "local") {
+          await voiceExecute.current?.(text, signal, taskScope.signal);
+          return;
+        }
+        const request = new AbortController();
+        const abort = () => request.abort(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+        assistantRequests.current.add(request);
+        try {
+          await voiceExecute.current?.(text, request.signal, taskScope.signal);
+        } catch (failure) {
+          if (
+            !request.signal.aborted &&
+            (failure as Error)?.name !== "AbortError"
+          ) {
+            setVoiceCaption((caption) =>
+              caption === text ? errorMessage(failure) : caption,
+            );
+            throw failure;
+          }
+        } finally {
+          assistantRequests.current.delete(request);
+          signal.removeEventListener("abort", abort);
+        }
       },
       (failure) => console.error("[voice-agent]", failure),
       450,
@@ -1710,21 +1759,45 @@ Tools and controls depend on the current interface; open the relevant surface be
     setListening(true);
     setVoiceState("thinking");
     setStatus("");
+    let lastBoardFrame: string | undefined;
+    let lastBoardCapture = -Infinity;
     try {
       const handle = await startDuplexSpeech({
         stream,
         visualFrame: Capacitor.isNativePlatform()
-          ? async (previousStamp) => {
+          ? async (previousStamp, immediate) => {
               const id = focusedDocument();
               const name = `document.voice.frame.${id}`;
-              if (!id || !classroomCommands.has(name)) {
+              if (id) {
+                lastBoardFrame = undefined;
+                if (!classroomCommands.has(name)) {
+                  return;
+                }
+                const view = (await classroomCommands.execute({
+                  name,
+                  args: { previousStamp },
+                })) as { stamp: string; image: string } | undefined;
+                return focusedDocument() === id ? view : undefined;
+              }
+              const now = performance.now();
+              if (
+                !immediate &&
+                previousStamp?.startsWith("board:") &&
+                now - lastBoardCapture < 1100
+              ) {
                 return;
               }
-              const view = (await classroomCommands.execute({
-                name,
-                args: { previousStamp },
-              })) as { stamp: string; image: string } | undefined;
-              return focusedDocument() === id ? view : undefined;
+              lastBoardCapture = now;
+              const { image } = await NativeClassroom.captureFrame();
+              if (
+                focusedDocument() ||
+                (previousStamp?.startsWith("board:") &&
+                  image === lastBoardFrame)
+              ) {
+                return;
+              }
+              lastBoardFrame = image;
+              return { stamp: `board:${now}`, image };
             }
           : undefined,
         signal: opening.signal,
@@ -1826,7 +1899,8 @@ Tools and controls depend on the current interface; open the relevant surface be
     }
     if (
       currentSettings().assistantVoice === "duplex" &&
-      !duplexSpeech.current
+      !duplexSpeech.current &&
+      !voiceTurns.current
     ) {
       if (duplexOpening.current) {
         await duplexOpening.current;
@@ -1869,12 +1943,22 @@ Tools and controls depend on the current interface; open the relevant surface be
       duplexOpening.current = opening;
       try {
         await opening;
+        return;
+      } catch (failure) {
+        if (
+          generation !== voiceGeneration.current ||
+          recorder.current ||
+          currentSettings().speech !== "cloud" ||
+          !/HTTP (?:401|403)\b/.test(errorMessage(failure))
+        ) {
+          throw failure;
+        }
+        setError(errorMessage(failure));
       } finally {
         if (duplexOpening.current === opening) {
           duplexOpening.current = null;
         }
       }
-      return;
     }
 
     if (voicePausedRef.current) {
@@ -2147,19 +2231,26 @@ Tools and controls depend on the current interface; open the relevant surface be
       {
         role: "system",
         content:
-          "Summarize this meeting or class using only its timestamped transcript. Include the topic, key ideas, conclusions, action items and open questions where supported. Keep important timestamps and acknowledge unclear speech. Do not invent facts. Write the summary in the active interface language, even when the transcript uses another language.",
+          item.cloudTranscript || item.transcript.some((line) => line.speaker)
+            ? "Use the timestamped transcript and its speaker labels. For a multi-speaker discussion, first summarize what each labeled speaker said, their position, and commitments. Keep unattributed lines separate and never infer identities. Then give your own clearly labeled suggestions, possible shortcomings and open issues. For a single speaker or a recording without a discussion, answer any actual questions recorded. If there are no questions, summarize the statements or presentation. Preserve relevant timestamps and use the interface language."
+            : "Summarize this meeting or class using only its timestamped transcript. Include the topic, key ideas, conclusions, action items and open questions where supported. Keep important timestamps and acknowledge unclear speech. Do not invent facts. Write the summary in the active interface language, even when the transcript uses another language.",
       },
       {
         role: "user",
         content: item.transcript
-          .map((line) => `[${timestamp(line.time)}] ${line.text}`)
+          .map((line) => `[${timestamp(line.time)}] ${transcriptText(line)}`)
           .join("\n"),
       },
     ]);
 
   const startRecordingSpeech = async (instance: BoardRecorder) => {
     const speechGeneration = ++recordSpeechGeneration.current;
-    await recordSpeechRelease.current;
+    const sharedAsr = duplexRecordingSpeech.current;
+    duplexRecordingSpeech.current = null;
+    await Promise.all([
+      recordSpeechRelease.current,
+      sharedAsr?.stop().catch(() => {}),
+    ]);
     if (
       recorder.current !== instance ||
       stoppingRecording.current ||
@@ -2167,8 +2258,13 @@ Tools and controls depend on the current interface; open the relevant surface be
     ) {
       return;
     }
-    const speechStartedAt = duplexSpeech.current?.startedAt ?? Date.now();
-    const timelineOffset = duplexSpeech.current
+    const cloudRecording = recordUsesCloud.current;
+    const duplex = duplexSpeech.current;
+    const duplexTranscriptSource = duplex && !cloudRecording;
+    const speechStartedAt = duplexTranscriptSource
+      ? duplex.startedAt
+      : Date.now();
+    const timelineOffset = duplexTranscriptSource
       ? (speechStartedAt - recordStarted.current) / 1000
       : recordElapsed();
     const timelineLine = (line: TranscriptLine): TranscriptLine | null => {
@@ -2193,8 +2289,20 @@ Tools and controls depend on the current interface; open the relevant surface be
           ),
         0,
       );
+      let speaker: string | undefined;
+      if (line.speaker) {
+        const speakers = recordingSpeakers.current;
+        speaker = speakers.get(line.speaker);
+        if (!speaker) {
+          speaker =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[speakers.size] ||
+            String(speakers.size + 1);
+          speakers.set(line.speaker, speaker);
+        }
+      }
       return {
         ...line,
+        ...(speaker ? { speaker } : {}),
         time: Math.max(0, line.time + timelineOffset - paused / 1000),
       };
     };
@@ -2208,6 +2316,18 @@ Tools and controls depend on the current interface; open the relevant surface be
       }
       recordSpeechGeneration.current++;
       setInterimTranscript(null);
+      if (duplex && cloudRecording) {
+        const handle = duplexRecordingSpeech.current;
+        duplexRecordingSpeech.current = null;
+        recordSpeechRelease.current = handle?.cancel().catch(() => {});
+        setError(
+          t(
+            "fcboard.recording_continues_live_transcription_is_unavailable_error",
+            { error: message },
+          ),
+        );
+        return;
+      }
       const handle = localSpeech.current;
       localSpeech.current = null;
       stopSpeech.current?.();
@@ -2226,7 +2346,7 @@ Tools and controls depend on the current interface; open the relevant surface be
         ),
       );
     };
-    if (duplexSpeech.current) {
+    if (duplexTranscriptSource) {
       duplexTranscript.current = {
         line: (line) => {
           if (speechGeneration !== recordSpeechGeneration.current) {
@@ -2247,7 +2367,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       };
       return;
     }
-    if (["local", "cloud"].includes(currentSettings().speech)) {
+    if (cloudRecording || currentSettings().speech === "local") {
       try {
         const handle = await startRealtimeSpeech(
           (line) => {
@@ -2281,10 +2401,12 @@ Tools and controls depend on the current interface; open the relevant surface be
               setInterimTranscript(line ? timelineLine(line) : null);
             }
           },
+          cloudRecording ? (message) => setError(message) : undefined,
+          cloudRecording,
         );
         if (
           recorder.current !== instance ||
-          stoppingRecording.current ||
+          (stoppingRecording.current && !cloudRecording) ||
           (recordPausedAt.current !== undefined &&
             !recordSpeechPausedForCommands.current) ||
           speechGeneration !== recordSpeechGeneration.current
@@ -2292,7 +2414,11 @@ Tools and controls depend on the current interface; open the relevant surface be
           await handle.cancel();
           return;
         }
-        localSpeech.current = handle;
+        if (duplex && cloudRecording) {
+          duplexRecordingSpeech.current = handle;
+        } else {
+          localSpeech.current = handle;
+        }
       } catch (failure) {
         if (
           recorder.current !== instance ||
@@ -2354,6 +2480,10 @@ Tools and controls depend on the current interface; open the relevant surface be
   ) => {
     source?.throwIfAborted();
     await recordingsReady.current;
+    if (currentSettings().speech === "cloud") {
+      await duplexOpening.current;
+      source?.throwIfAborted();
+    }
     if (recorder.current) {
       throw new Error(t("fcboard.a_recording_is_running_or_being_saved"));
     }
@@ -2387,6 +2517,8 @@ Tools and controls depend on the current interface; open the relevant surface be
       recordingVoiceCommand.current = true;
     }
     transcript.current = [];
+    recordUsesCloud.current = currentSettings().speech === "cloud";
+    recordingSpeakers.current.clear();
     setInterimTranscript(null);
     setElapsed(0);
     const instance = new BoardRecorder();
@@ -2411,7 +2543,14 @@ Tools and controls depend on the current interface; open the relevant surface be
         duplexSpeech.current === liveDuplex &&
         liveDuplex.useRecordingStream
       ) {
-        await liveDuplex.useRecordingStream(instance.audioStream);
+        await liveDuplex
+          .useRecordingStream(instance.audioStream)
+          .catch((failure) => {
+            if (!recordUsesCloud.current) {
+              throw failure;
+            }
+            setError(errorMessage(failure));
+          });
       }
       if (duplexInput || (liveDuplex && duplexSpeech.current === liveDuplex)) {
         recordingVoiceCommand.current = true;
@@ -2469,12 +2608,28 @@ Tools and controls depend on the current interface; open the relevant surface be
         invalidateVoice();
         setListening(false);
       }
-      const stopped = recorder.current!.stop();
-      // Stop media now, then drain the remaining ASR frames before persisting text.
-      void stopped.catch(() => {});
+      const instance = recorder.current!;
+      const cloudRecording = recordUsesCloud.current;
+      // End media at the click, retaining its source track until cloud ASR drains.
+      if (cloudRecording && recordPausedAt.current === undefined) {
+        try {
+          instance.pause();
+        } catch {
+          // The MediaRecorder stop event may have already arrived.
+        }
+      }
+      let stopped = cloudRecording ? undefined : instance.stop();
+      void stopped?.catch(() => {});
       await recordControlTask.current?.catch(recordingFailure);
       try {
-        if (duplexSpeech.current) {
+        if (cloudRecording) {
+          await recordSpeechTask.current;
+          const handle =
+            duplexRecordingSpeech.current ||
+            (!duplexSpeech.current ? localSpeech.current : null);
+          duplexRecordingSpeech.current = null;
+          await handle?.stop();
+        } else if (duplexSpeech.current) {
           await duplexSpeech.current.flush();
         } else {
           await localSpeech.current?.stop();
@@ -2489,6 +2644,7 @@ Tools and controls depend on the current interface; open the relevant surface be
           ),
         );
       }
+      stopped ||= instance.stop();
       if (!keepDuplex) {
         localSpeech.current = null;
       }
@@ -2498,7 +2654,12 @@ Tools and controls depend on the current interface; open the relevant surface be
       stopSpeech.current?.();
       stopSpeech.current = null;
       const result = await stopped;
-      await duplexSpeech.current?.restoreCapture?.();
+      await duplexSpeech.current?.restoreCapture?.().catch((failure) => {
+        if (!cloudRecording) {
+          throw failure;
+        }
+        setError(errorMessage(failure));
+      });
       recorder.current = null;
       setRecording(false);
       let item: Recording = {
@@ -2508,6 +2669,7 @@ Tools and controls depend on the current interface; open the relevant surface be
         mode: recordMode.current,
         transcript: [...transcript.current],
         summary: "",
+        ...(cloudRecording ? { cloudTranscript: true } : {}),
       };
       const saved = await persistRecords([item, ...recordsRef.current]);
       setActiveId(item.id);
@@ -2603,7 +2765,10 @@ Tools and controls depend on the current interface; open the relevant surface be
           setRecordingPaused(true);
           setInterimTranscript(null);
           setRecordPhase("paused");
-          if (recordingVoiceCommand.current && voiceTurns.current) {
+          if (
+            (recordingVoiceCommand.current && voiceTurns.current) ||
+            (duplexSpeech.current && recordUsesCloud.current)
+          ) {
             recordSpeechPausedForCommands.current = true;
             recordCommandPauses.current.push({ start: recordPausedAt.current });
             await recordSpeechTask.current;
@@ -2655,9 +2820,15 @@ Tools and controls depend on the current interface; open the relevant surface be
       .filter((line) => line.trim())
       .map((line) => {
         const match = line.match(/^(\d+):(\d{2})\s+(.+)$/);
+        const content = match ? match[3] : line;
+        const speaker = content.match(/^\[([A-Z]|[0-9]+)\] (.+)$/);
+        const labeled =
+          speaker &&
+          active.transcript.some((previous) => previous.speaker === speaker[1]);
         return {
           time: match ? Number(match[1]) * 60 + Number(match[2]) : 0,
-          text: match ? match[3] : line,
+          text: labeled ? speaker[2] : content,
+          ...(labeled ? { speaker: speaker[1] } : {}),
         };
       });
     void persistRecords(
@@ -2810,33 +2981,47 @@ Tools and controls depend on the current interface; open the relevant surface be
       classroomCommands.register(
         "math.plot",
         "Insert a function graph from args.expression; args.surface selects 3D. Optional numeric x,y,z,a,b,c.",
-        (args) => {
-          if (args.signal instanceof AbortSignal) {
-            args.signal.throwIfAborted();
-          }
+        async (args) => {
+          const signal =
+            args.signal instanceof AbortSignal ? args.signal : undefined;
+          signal?.throwIfAborted();
           const ids = Array.isArray(args.sourceIds)
             ? args.sourceIds.filter(
                 (id): id is string => typeof id === "string",
               )
             : [];
-          if (
-            ids.length &&
+          const sourceCurrent = () =>
+            !ids.length ||
             selectionSignature(
               api
                 .getSceneElements()
                 .filter((element) => ids.includes(element.id)),
-            ) !== args.sourceSignature
+            ) === args.sourceSignature;
+          if (!sourceCurrent()) {
+            return;
+          }
+          const next = validatedPlot(args);
+          const revision = classroomCommands.revision;
+          const preview =
+            args.useVega === true && !next.surface && !next.relation
+              ? await vegaFunctionImage(next)
+              : undefined;
+          signal?.throwIfAborted();
+          if (
+            !sourceCurrent() ||
+            !classroomCommands.isCurrent(revision, signal)
           ) {
             return;
           }
           createPlot(
-            validatedPlot(args),
+            next,
             false,
             typeof args.sourceSignature === "string"
               ? args.sourceSignature
               : undefined,
             args.quiet === true,
             ids,
+            preview,
           );
         },
       ),
@@ -2942,12 +3127,22 @@ Tools and controls depend on the current interface; open the relevant surface be
       ),
       classroomCommands.register(
         "record.open",
-        "Inspect audio, video, transcripts and summaries; optional args.id.",
+        "Open the recording controls and inspect audio, video, transcripts and summaries; optional args.id. The user presses Start to begin microphone capture.",
         (args) => {
           if (typeof args.id === "string") {
             setActiveId(args.id);
           }
           setPanel("record");
+        },
+      ),
+      classroomCommands.register(
+        "record.close",
+        "Close the recording panel. A running recording continues; use record.stop to finish and save it.",
+        () => {
+          if (panel === "record") {
+            close(false);
+          }
+          return { open: false, recording: !!recorder.current };
         },
       ),
       classroomCommands.register(
@@ -3439,10 +3634,6 @@ Tools and controls depend on the current interface; open the relevant surface be
                       [
                         ["mathTranscription", "math_transcription_provider"],
                         ["translationProvider", "translation_provider"],
-                        [
-                          "handwritingGeneration",
-                          "handwriting_generation_provider",
-                        ],
                       ] as const
                     ).map(([key, label]) => (
                       <label key={key}>
@@ -3877,6 +4068,7 @@ Tools and controls depend on the current interface; open the relevant surface be
                   interim={interimTranscript}
                   busy={busy}
                   controlBusy={recordControlPending}
+                  manualStart={settings.speech === "cloud"}
                   onStart={() => {
                     const source = classroomCommands.interactionSource;
                     void run(() => startRecording(mode, source));

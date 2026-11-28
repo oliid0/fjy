@@ -5,7 +5,10 @@ import { startAndroidSpeech } from "./systemSpeech";
 
 import { currentSettings, validateEndpoint } from "./settings";
 
-export type TranscriptLine = { time: number; text: string };
+export type TranscriptLine = { time: number; text: string; speaker?: string };
+
+export const transcriptText = ({ text, speaker }: TranscriptLine) =>
+  speaker ? `[${speaker}] ${text}` : text;
 type WebSpeech = {
   lang: string;
   continuous: boolean;

@@ -61,6 +61,7 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 import { validatedPlot } from "./mathRecognition";
 import { FunctionGraphObject } from "./FunctionGraphObject";
 import { functionGraphImage, plotSize } from "./functionVisualization";
+import { vegaFunctionImage } from "./vegaFunctionGraph";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -113,12 +114,13 @@ import {
 import { saveDocumentPdf, saveOfficeDocument } from "./boardFile";
 import { chat, visualMessage } from "./ai";
 
-import { currentSettings } from "./settings";
+import { ARK_VISION_MODEL, currentSettings } from "./settings";
 import { selectionPathBounds } from "./selection";
 import { answerFontSize, layoutBoardText } from "./textLayout";
 import { prepareInkWriting, inkStrokeStyle } from "./inkWriting";
 import { documentInkElement, documentStrokeGeometry } from "./documentInk";
 import {
+  calculationAnswerText,
   inkAssistMode,
   inkRecognitionDelay,
   recognizeInkContent,
@@ -914,15 +916,25 @@ export const FilePreview = ({
     return () => window.removeEventListener("message", receive);
   }, [html]);
 
-  const next = useCallback(
-    (source?: AbortSignal) =>
-      navigate(Math.min(pages.length - 1, pageRef.current + 1), source),
+  const stepPage = useCallback(
+    async (direction: -1 | 1, source?: AbortSignal) => {
+      if (documentSharing.following) {
+        throw new Error(t("fcboard.syncing_live"));
+      }
+      source?.throwIfAborted();
+      const index = pageRef.current + direction;
+      if (index < 0 || index >= pages.length) {
+        return {
+          changed: false,
+          boundary: direction < 0 ? "first" : "last",
+          page: pageRef.current + 1,
+        };
+      }
+      await navigate(index, source);
+      source?.throwIfAborted();
+      return { changed: pageRef.current === index, page: pageRef.current + 1 };
+    },
     [pages.length, navigate],
-  );
-  const previous = useCallback(
-    (source?: AbortSignal) =>
-      navigate(Math.max(0, pageRef.current - 1), source),
-    [navigate],
   );
 
   const close = useCallback(
@@ -1100,15 +1112,19 @@ export const FilePreview = ({
     const registrations = [
       classroomCommands.register(
         "document.next",
-        "Go to the next document page.",
+        "Go to the next document page. Returns the visible page and whether it changed.",
         (args) =>
-          next(args.signal instanceof AbortSignal ? args.signal : undefined),
+          stepPage(
+            1,
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          ),
       ),
       classroomCommands.register(
         "document.previous",
-        "Go to the previous presentation page.",
+        "Go to the previous document page. Returns the visible page and whether it changed.",
         (args) =>
-          previous(
+          stepPage(
+            -1,
             args.signal instanceof AbortSignal ? args.signal : undefined,
           ),
       ),
@@ -1699,10 +1715,18 @@ export const FilePreview = ({
           throw new Error(t("fcboard.annotation_text_is_empty_or_too_long"));
         }
         const strokes = inkRef.current[pageRef.current] || [];
+        const existing = args.id
+          ? strokes.find((stroke) => stroke.id === args.id && stroke.text)
+          : undefined;
+        if (args.id && !existing) {
+          throw new Error(t("fcboard.annotation_not_found"));
+        }
         const sourceIds =
           Array.isArray(args.sourceIds) &&
           args.sourceIds.every((id) => typeof id === "string")
             ? args.sourceIds
+            : existing
+            ? [existing.id]
             : args.placement === "center"
             ? []
             : selectedInkRef.current;
@@ -1715,23 +1739,26 @@ export const FilePreview = ({
           args.language === undefined
             ? undefined
             : parseLanguageStudy(JSON.stringify(args.language), true);
+        const translated =
+          language !== undefined || args.targetLanguage !== undefined;
         if (
-          language &&
-          (args.text !== language.translation ||
+          translated &&
+          ((language && args.text !== language.translation) ||
             !selected.length ||
             typeof args.targetLanguage !== "string" ||
             !/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(args.targetLanguage))
         ) {
           throw new DOMException("Language source changed", "AbortError");
         }
-        const languageGroup = language ? crypto.randomUUID() : undefined;
+        const languageGroup = translated ? crypto.randomUUID() : undefined;
         if (args.sourceSignature && args.sourceSignature !== sourceSignature) {
           throw new DOMException("Document ink changed", "AbortError");
         }
         const replaceIds = new Set(
           args.placement === "replace" ? sourceIds : [],
         );
-        const source = selected.find((stroke) => stroke.text) || selected[0];
+        const source =
+          existing || selected.find((stroke) => stroke.text) || selected[0];
         const presentation = args.presentation ?? currentSettings().answerStyle;
         if (!["match", "handwritten", "text"].includes(String(presentation))) {
           throw new Error(t("fcboard.unknown_answer_style"));
@@ -1745,12 +1772,6 @@ export const FilePreview = ({
               (source && !source.text
                 ? FONT_FAMILY.Excalifont
                 : FONT_FAMILY.Helvetica);
-        const existing = args.id
-          ? strokes.find((stroke) => stroke.id === args.id && stroke.text)
-          : undefined;
-        if (args.id && !existing) {
-          throw new Error(t("fcboard.annotation_not_found"));
-        }
         const boxes = selected.map(documentStrokeBounds);
         const bounds = boxes.length
           ? {
@@ -1812,7 +1833,7 @@ export const FilePreview = ({
               : args.placement === "center"
               ? "center"
               : "below",
-            bounds: existing ? undefined : bounds,
+            bounds: existing ? documentStrokeBounds(existing) : bounds,
           },
         );
         if (!layout) {
@@ -1862,8 +1883,12 @@ export const FilePreview = ({
         );
         if (
           (args.signal instanceof AbortSignal && args.signal.aborted) ||
-          (language && interfaceLanguage !== getLanguage().code) ||
+          (translated && interfaceLanguage !== getLanguage().code) ||
           targetPage !== pageRef.current ||
+          (existing &&
+            (inkRef.current[targetPage] || []).find(
+              (stroke) => stroke.id === existing.id,
+            ) !== existing) ||
           documentSourceSignature(
             (inkRef.current[targetPage] || []).filter((stroke) =>
               sourceIds.includes(stroke.id),
@@ -1880,7 +1905,7 @@ export const FilePreview = ({
                 (stroke) => stroke.id !== next.id && !replaceIds.has(stroke.id),
               )
               .map((stroke) =>
-                language && languageGroup && sourceIds.includes(stroke.id)
+                languageGroup && sourceIds.includes(stroke.id)
                   ? {
                       ...stroke,
                       language: {
@@ -1902,6 +1927,7 @@ export const FilePreview = ({
             next,
           ],
         });
+        return { ids: [next.id] };
       }),
       classroomCommands.register("document.resize", "@internal", (args) =>
         transformSelection(args, true),
@@ -2107,7 +2133,7 @@ export const FilePreview = ({
                 settings.ocrModel ||
                 (new URL(settings.endpoint).hostname ===
                 "ark.cn-beijing.volces.com"
-                  ? "doubao-seed-2-1-lite-260915"
+                  ? ARK_VISION_MODEL
                   : settings.model),
             },
           );
@@ -2642,8 +2668,7 @@ export const FilePreview = ({
     return () => registrations.forEach((stop) => stop());
   }, [
     active,
-    next,
-    previous,
+    stepPage,
     navigate,
     close,
     file.name,
@@ -2944,12 +2969,12 @@ export const FilePreview = ({
             await classroomCommands.execute({
               name: "document.text",
               args: {
-                text: result.study.translation,
+                text: result.translation,
                 presentation: "text",
                 placement: "below",
                 sourceIds,
                 sourceSignature: signature,
-                sourceLines: result.text.split("\n").length,
+                sourceLines: result.text?.split("\n").length,
                 language: result.study,
                 targetLanguage: result.targetLanguage,
                 signal: request.signal,
@@ -2959,13 +2984,7 @@ export const FilePreview = ({
             const text =
               result.kind === "text"
                 ? result.text
-                : `${
-                    result.layout ||
-                    /=\s*$/.test(result.text) ||
-                    /^[xyz] =/.test(result.answer)
-                      ? ""
-                      : "= "
-                  }${result.answer}`;
+                : calculationAnswerText(result);
             await classroomCommands.execute({
               name: "document.text",
               args: {
@@ -2980,11 +2999,18 @@ export const FilePreview = ({
                 sourceLines:
                   result.kind === "calculation" && result.layout
                     ? result.layout.lines
-                    : result.text.split("\n").length,
+                    : result.text?.split("\n").length,
                 signal: request.signal,
               },
             });
           } else if (result.kind === "function") {
+            const preview =
+              result.cloud && !result.plot.surface && !result.plot.relation
+                ? await vegaFunctionImage(result.plot)
+                : undefined;
+            if (!current()) {
+              return;
+            }
             drawPlot(
               api,
               result.plot,
@@ -2994,6 +3020,7 @@ export const FilePreview = ({
               true,
               { left, top, right, bottom },
               sourceIds,
+              preview,
             );
           } else {
             const shape = recognizedShapeSkeleton(
@@ -3636,14 +3663,14 @@ export const FilePreview = ({
         }
         if (event.key === "ArrowRight") {
           event.preventDefault();
-          void next(classroomCommands.interactionSource).catch((failure) =>
-            setNotice(String(failure)),
+          void stepPage(1, classroomCommands.interactionSource).catch(
+            (failure) => setNotice(String(failure)),
           );
         }
         if (event.key === "ArrowLeft") {
           event.preventDefault();
-          void previous(classroomCommands.interactionSource).catch((failure) =>
-            setNotice(String(failure)),
+          void stepPage(-1, classroomCommands.interactionSource).catch(
+            (failure) => setNotice(String(failure)),
           );
         }
       }}

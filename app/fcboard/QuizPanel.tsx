@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Button, CircularProgress, IconButton } from "@mui/material";
 import { t } from "@fcboard/fcboard/i18n";
-import { CloseIcon } from "@fcboard/fcboard/components/icons";
 
 import { MaterialPanel } from "./MaterialPanel";
 import { quizDocument, quizUpdate } from "./quiz";
@@ -87,6 +86,7 @@ export const QuizPanel = ({
     >
       <div
         style={{
+          flexShrink: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -104,8 +104,20 @@ export const QuizPanel = ({
             })}
           </span>
         )}
-        <IconButton aria-label={t("buttons.close")} onClick={onClose}>
-          {CloseIcon}
+        <IconButton
+          aria-label={t("buttons.close")}
+          onClick={onClose}
+          sx={{ marginLeft: "auto", flexShrink: 0, color: "inherit" }}
+        >
+          <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24">
+            <path
+              d="m6 6 12 12M18 6 6 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
         </IconButton>
       </div>
       {error && (

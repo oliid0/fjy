@@ -16,7 +16,6 @@ export type Settings = {
   inkLanguage: "auto" | import("./languagePacks").HandwritingPack["tag"];
   mathTranscription: "local" | "cloud";
   translationProvider: "local" | "cloud";
-  handwritingGeneration: "local" | "cloud";
   apiKey: string;
   speechRoutingVersion?: number;
   speech: "cloud" | "local" | "system" | "custom";
@@ -34,6 +33,8 @@ export type Settings = {
   answerStyle: "match" | "handwritten" | "text";
 };
 
+export const ARK_VISION_MODEL = "doubao-seed-2-1-lite-260915";
+
 export const defaults: Settings = {
   endpoint: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
   model: "doubao-seed-2-0-mini-260428",
@@ -44,7 +45,6 @@ export const defaults: Settings = {
   inkLanguage: "auto",
   mathTranscription: "local",
   translationProvider: "local",
-  handwritingGeneration: "local",
   apiKey: "",
   speech: "system",
   assistantVoice: "agent",
@@ -64,13 +64,19 @@ export const defaults: Settings = {
 export const loadSettings = (): Settings => {
   try {
     const saved = JSON.parse(localStorage.getItem("fcboard-settings") || "{}");
+    const preferences = Object.fromEntries(
+      Object.keys(defaults)
+        .filter((key) => Object.hasOwn(saved, key))
+        .map((key) => [key, saved[key]]),
+    );
     return {
       ...defaults,
       speech: Capacitor.isNativePlatform() ? "cloud" : defaults.speech,
       assistantVoice: Capacitor.isNativePlatform()
         ? "duplex"
         : defaults.assistantVoice,
-      ...saved,
+      ...preferences,
+      speechRoutingVersion: saved.speechRoutingVersion,
       model: saved.model?.trim() || defaults.model,
       imageModel: saved.imageModel?.trim() || defaults.imageModel,
       selectionImages: saved.selectionImages === true,

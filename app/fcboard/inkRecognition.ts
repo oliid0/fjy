@@ -8,7 +8,11 @@ import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
 import { explainLanguage, translateLanguageImage } from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
-import { calculationInk, numericSumCandidate } from "./calculationInk";
+import {
+  calculationInk,
+  columnInkRows,
+  numericSumCandidate,
+} from "./calculationInk";
 import { calculateAsync } from "./mathComputation";
 import { fitInkShape, isShapeClosed } from "./shapeRecognition";
 import { hasDigitalInk, recognizeNativeInk } from "./digitalInk";
@@ -38,13 +42,32 @@ export type InkRecognitionResult =
   | { kind: "text"; text: string }
   | {
       kind: "language";
-      text: string;
-      study: LanguageStudy;
+      text?: string;
+      study?: LanguageStudy;
+      translation: string;
       targetLanguage: string;
     }
   | RecognizedShape
   | { kind: "magic"; prompt: string; image?: string; transparent?: boolean }
-  | (MathResult & { text: string });
+  | (Extract<MathResult, { kind: "function" }> & { text: string; cloud?: true })
+  | (Omit<Extract<MathResult, { kind: "calculation" }>, "expression"> & {
+      expression?: string;
+      text?: string;
+      hasEquals?: boolean;
+    });
+
+export const calculationAnswerText = (
+  result: Extract<InkRecognitionResult, { kind: "calculation" }>,
+) =>
+  `${
+    result.layout ||
+    (result.hasEquals ?? /=\s*$/.test(result.text || "")) ||
+    (result.hasEquals === undefined
+      ? /^[xyz] =/.test(result.answer)
+      : /^[a-z]\s*=/.test(result.answer))
+      ? ""
+      : "= "
+  }${result.answer}`;
 
 export const inkRecognitionDelay = (mode: InkAssistMode, strokes: InkInput) =>
   mode === "calculation" && calculationInk(strokes).complete
@@ -106,7 +129,7 @@ export function recognizeInkContent(
   mode: InkAssistMode,
   ...options: InkRecognitionOptions
 ): Promise<InkRecognitionResult>;
-/** Both visible surfaces submit raw ink first and receive validated objects, never a rendered math image. */
+/** Both visible surfaces share the selected recognition provider and placement rules. */
 export async function recognizeInkContent(
   mode: InkAssistMode,
   capture: () => Promise<string>,
@@ -115,6 +138,83 @@ export async function recognizeInkContent(
   languageHint?: string,
   chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
 ): Promise<InkRecognitionResult> {
+  const settings = currentSettings();
+  if (
+    (mode === "function" || mode === "calculation") &&
+    settings.mathTranscription === "cloud"
+  ) {
+    if (!settings.apiKey.trim()) {
+      throw new Error(
+        t(
+          "fcboard.set_an_api_key_and_a_vision_model_or_endpoint_id_in_ai_settings",
+        ),
+      );
+    }
+    const image = await capture();
+    signal.throwIfAborted();
+    if (!image.startsWith("data:image/")) {
+      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
+    }
+    const rows = mode === "calculation" ? columnInkRows(strokes) : undefined;
+    const output = (
+      await chat(
+        [
+          {
+            role: "system",
+            content:
+              mode === "function"
+                ? "Read every handwritten function from the image. Return only its complete LaTeX equation or inequality, one per line. Preserve the left side, relation, variables, signs, numbers, exponents, numerator, denominator, and grouping exactly as written. If any symbol is unreadable or incomplete, return only ∅. Never return a guessed character or a question-mark placeholder. Do not solve, simplify, plot, explain, or use Markdown."
+                : "Read the actual handwritten calculation, including the two-dimensional layout, digit positions, operators, and grouping, and compute it. A trailing equal sign or a bar underneath a column calculation marks the answer position. A fraction bar between operands is division. Return only the final mathematical result in plain Unicode notation, with no prefix, trailing punctuation, code fences, units, or explanation. Use digits, signed fractions or decimals, √, π, and mathematical operators as needed. For an equation return the solved variable assignments. Return ∅ if a complete problem cannot be read confidently or already has an answer.",
+          },
+          visualMessage(
+            mode === "function"
+              ? "Transcribe the handwritten graph expression."
+              : rows
+              ? "The ink has a bottom answer bar. Read the operand rows above it and their written operators."
+              : "Read the written expression and return its result.",
+            image,
+          ),
+        ],
+        signal,
+        settings,
+        { maxTokens: 2048, timeoutMs: 20000, useVisionModel: true },
+      )
+    ).trim();
+    signal.throwIfAborted();
+    const active = currentSettings();
+    if (
+      active.mathTranscription !== settings.mathTranscription ||
+      active.apiKey !== settings.apiKey ||
+      active.endpoint !== settings.endpoint ||
+      active.ocrModel !== settings.ocrModel ||
+      active.model !== settings.model
+    ) {
+      throw new DOMException("Math provider changed", "AbortError");
+    }
+    if (mode === "function") {
+      return { ...localFunctionResult(output), text: output, cloud: true };
+    }
+    if (
+      output.length > 500 ||
+      !/[\dπ∞]/.test(output) ||
+      !/^(?:\d|[xyzabeiπ∞√∛²³₀-₉⁰-⁹()+\-−×÷*/^=.,;:{}[\]|±∓≤≥<>% \n])*$/u.test(
+        output,
+      ) ||
+      /[A-Za-z]{2}|[=.,;:]$/u.test(output) ||
+      (output.includes("=") &&
+        !output
+          .split(/[,;\n]+/)
+          .every((part) => /^\s*[a-z]\s*=[^=]+$/u.test(part)))
+    ) {
+      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
+    }
+    return {
+      kind: "calculation",
+      answer: output,
+      hasEquals: !rows && calculationInk(strokes).complete,
+      ...(rows ? { layout: { mode: "column", lines: rows.length } } : {}),
+    };
+  }
   if (
     mode === "text" ||
     mode === "language" ||
@@ -128,6 +228,14 @@ export async function recognizeInkContent(
         getLanguage().code,
         settings.inkLanguage,
         settings.translationProvider,
+        ...(settings.translationProvider === "cloud"
+          ? [
+              settings.endpoint,
+              settings.apiKey,
+              settings.ocrModel,
+              settings.model,
+            ]
+          : []),
       ]);
     };
     const languageStamp = languageConfiguration();
@@ -150,12 +258,15 @@ export async function recognizeInkContent(
       }
       const image = await capture();
       assertLanguageCurrent();
-      const study = await translateLanguageImage(image, signal, targetLanguage);
+      const translation = await translateLanguageImage(
+        image,
+        signal,
+        targetLanguage,
+      );
       assertLanguageCurrent();
       return {
         kind: "language",
-        text: study.term,
-        study,
+        translation,
         targetLanguage,
       };
     }
@@ -238,6 +349,7 @@ export async function recognizeInkContent(
         kind: "language",
         text,
         study,
+        translation: study.translation,
         targetLanguage: translationTarget,
       };
     }

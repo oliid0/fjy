@@ -24,6 +24,7 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { SelectionActions } from "./SelectionActions";
 import { registerCanvasCommands } from "./canvasCommands";
+import { defaults, saveSettings } from "./settings";
 import { insertionDefaults, renderInsertion } from "./insertObjects";
 
 let api: FcboardImperativeAPI;
@@ -105,6 +106,24 @@ it.each(["freedraw", "text", "image", "rectangle"] as const)(
     expect(
       row().getByRole("button", { name: t("fcboard.selection_layers") }),
     ).toBeEnabled();
+  },
+);
+
+it.each(["image", "rectangle"] as const)(
+  "offers cloud AI on a pure %s selection and keeps the local menu after switching",
+  (type) => {
+    select([API.createElement({ type })]);
+    expect(row().queryByRole("button", { name: "AI" })).toBeNull();
+    try {
+      act(() => saveSettings({ ...defaults, ocr: "cloud" }, false));
+      click("AI");
+      expect(
+        screen.getByRole("menuitem", { name: t("fcboard.selection_question") }),
+      ).toBeVisible();
+    } finally {
+      act(() => saveSettings(defaults, false));
+    }
+    expect(row().queryByRole("button", { name: "AI" })).toBeNull();
   },
 );
 

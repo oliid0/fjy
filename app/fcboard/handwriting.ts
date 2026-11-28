@@ -173,6 +173,7 @@ export const handwritingElements = (
           fcGenerated: true,
           fcWrittenText: text,
           fcWrittenGroup: group,
+          fcWrittenHeight: options.height,
           fcInk: {
             version: pen === "brush" ? 3 : 2,
             pen,

@@ -18,6 +18,7 @@ export const startRealtimeSpeech = async (
   onActivity?: () => void,
   onInterim?: (line: TranscriptLine | null) => void,
   onNotice?: (message: string) => void,
+  separateSpeakers = false,
 ): Promise<LocalSpeechHandle> => {
   type Attempt = {
     cloud: boolean;
@@ -111,28 +112,33 @@ export const startRealtimeSpeech = async (
         );
         return { stop: async () => stop(), cancel: async () => stop() };
       }
-      return (cloud ? startCloudSpeech : startLocalSpeech)(
-        deliver,
-        fail,
-        stream,
-        activity,
-        (line) => {
-          if (!closed && current === attempt && !attempt.recovery) {
-            onInterim?.(
-              line
-                ? { ...line, time: Math.max(latestTime, offset + line.time) }
-                : null,
-            );
-          }
-        },
-      );
+      const interim = (line: TranscriptLine | null) => {
+        if (!closed && current === attempt && !attempt.recovery) {
+          onInterim?.(
+            line
+              ? { ...line, time: Math.max(latestTime, offset + line.time) }
+              : null,
+          );
+        }
+      };
+      return cloud
+        ? startCloudSpeech(
+            deliver,
+            fail,
+            stream,
+            activity,
+            interim,
+            separateSpeakers,
+          )
+        : startLocalSpeech(deliver, fail, stream, activity, interim);
     });
     return attempt.opening.then(async (handle) => {
       await handle.ready;
     });
   };
   const cloud =
-    currentSettings().speech === "cloud" && navigator.onLine !== false;
+    (separateSpeakers || currentSettings().speech === "cloud") &&
+    navigator.onLine !== false;
   transition = open(cloud);
   try {
     await transition;

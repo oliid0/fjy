@@ -971,6 +971,68 @@ it.each([
   },
 );
 
+it("updates a cloud worker with the rendered page after its own navigation", async () => {
+  saveSettings(
+    {
+      ...defaults,
+      speech: "cloud",
+      apiKey: "configured",
+      endpoint: "https://example.com/v1/chat/completions",
+    },
+    false,
+  );
+  const stop = registerBoardAgents();
+  let page = 1;
+  const capture = vi.fn(() => ({
+    text: `课件第${page}页`,
+    image: `data:image/png;base64,page-${page}`,
+    name: "lesson.pdf",
+    page,
+  }));
+  const draw = vi.fn(() => ({ ids: ["new-annotation"] }));
+  const releases = [
+    classroomCommands.context("document", () => ({ name: "lesson.pdf", page })),
+    classroomCommands.register("canvas.snapshot", "@internal", capture),
+    classroomCommands.register("document.next", "Next page", (args) => {
+      page++;
+      classroomCommands.invalidate(args.signal as AbortSignal);
+      return { changed: true, page };
+    }),
+    classroomCommands.register("canvas.ink", "Draw an annotation", draw),
+  ];
+  let observation = "";
+  const model = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        action: "commands",
+        commands: [{ name: "document.next" }],
+      }),
+    )
+    .mockImplementationOnce(async (messages) => {
+      observation = JSON.stringify(messages.at(-1));
+      return JSON.stringify({
+        action: "commands",
+        commands: [{ name: "canvas.ink" }],
+      });
+    })
+    .mockResolvedValueOnce('{"action":"done"}');
+  try {
+    const task = await start("翻页后根据新课件画标注");
+    await waitFor(async () =>
+      expect((await inspect(task.id)).state).toBe("completed"),
+    );
+    expect(JSON.stringify(model.mock.calls[0][0])).toContain("base64,page-1");
+    expect(observation).toContain("base64,page-2");
+    expect(observation).toContain("课件第2页");
+    expect(draw).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledTimes(2);
+  } finally {
+    releases.forEach((release) => release());
+    stop();
+  }
+});
+
 it("finishes seven dependent tool observations within the independent task budget", async () => {
   const host = setup();
   let calls = 0;

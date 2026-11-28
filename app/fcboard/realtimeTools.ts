@@ -80,7 +80,7 @@ const bindings = [
     name: "board_inspect",
     command: "canvas.inspect",
     description:
-      "Read real visible objects, ids, viewport, coordinates, selection and revision before operating.",
+      "Read visible objects, IDs, viewport, coordinates, selection and revision before operating. Generated handwriting strokes with the same writtenGroup form one text object for editing. For moving, aligning or resizing that writing, pass all observed IDs of the group.",
     properties: {},
     required: [],
   },
@@ -88,13 +88,13 @@ const bindings = [
     name: "board_write",
     command: "canvas.text",
     description:
-      "Write or correct editable board text. A title uses role=title,presentation=handwritten,placement=center,sourceIds=[]. Reuse an observed text id to correct it.",
+      "Write or correct any editable text, including labels, paragraphs and titles. role=title only sets the initial heading size. Use placement=center and sourceIds=[] for centered writing. Pass an observed text ID or a stroke ID from a generated writtenGroup to correct content in place. Use the returned IDs for subsequent operations.",
     properties: {
       text: { type: "string" },
       id: { type: "string" },
       role: { type: "string", enum: ["title"] },
       presentation: { type: "string", enum: ["match", "handwritten", "text"] },
-      placement: { type: "string", enum: ["center"] },
+      placement: { type: "string", enum: ["center", "inline", "below"] },
       sourceIds: { type: "array", items: { type: "string" } },
     },
     required: ["text"],
@@ -103,7 +103,7 @@ const bindings = [
     name: "board_draw",
     command: "canvas.ink",
     description:
-      "Draw actual editable pen strokes, including an apple, handwriting or demonstration diagram. Each stroke is an ordered polyline of [x,y] points in the inspected visible canvas coordinates. Use pen/color/width/opacity on this call for independent real brush, highlighter, dashed or rainbow effects. Submit meaningful stroke batches promptly; do not replace a requested drawing with text.",
+      "Draw actual editable pen strokes for a sketch, circuit or teaching diagram. Each stroke is an ordered polyline of [x,y] points in the inspected visible canvas coordinates. Use separate strokes for distinct lines, connect shared endpoints precisely, and use board_write for requested readable labels. Use pen/color/width/opacity for brush effects. Use board_shape for a precise geometric object such as a triangle.",
     properties: {
       strokes: {
         type: "array",
@@ -217,6 +217,17 @@ const bindings = [
     description:
       "Generate real question cards from the user's requested subject, count and types, optionally based on the visible board or courseware. Preparation runs in the background while conversation continues.",
     properties: { prompt: { type: "string" } },
+    required: ["prompt"],
+  },
+  {
+    name: "board_image",
+    command: "image.generate",
+    description:
+      "Generate and insert an explicitly requested illustration. The voice dispatcher can return a running image task; verify its actual result before reporting that an image was inserted.",
+    properties: {
+      prompt: { type: "string" },
+      transparent: { type: "boolean" },
+    },
     required: ["prompt"],
   },
   {
@@ -370,7 +381,7 @@ export const realtimeTools = (
     type: "function",
     name: "board_command",
     description:
-      "Execute any actually registered public command using its documented args. Visible mutations and long operations run in independent background tasks; inspect the returned task id for completion. Tools operate on the actual visible board.",
+      "Execute a registered public command with its documented args. Dependent board and panel actions return in order. Independent generation can return a running task id. Inspect that task or the component state before reporting completion.",
     parameters: {
       type: "object",
       properties: {

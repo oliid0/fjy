@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 import {
   CaptureUpdateAction,
@@ -25,7 +26,7 @@ import {
   objectSelection,
   styleFunctionPlots,
 } from "./board";
-import { currentSettings } from "./settings";
+import { Classroom as NativeClassroom } from "./native";
 import { insertGeneratedImage } from "./imageGeneration";
 import { documentStrokeBounds } from "./documents";
 import {
@@ -36,6 +37,7 @@ import {
 import { classroomCommands, commandObjectIds } from "./commands";
 import { LessonCanvas, validateLesson } from "./lesson";
 import { prepareInkWriting, inkStrokeStyle } from "./inkWriting";
+import { handwritingText } from "./handwriting";
 import { resourcePlacement } from "./resourcePlacement";
 import { registerResourceCommands } from "./resourceControls";
 import { registerLanguageCommands } from "./languageCommands";
@@ -217,6 +219,7 @@ export const registerCanvasCommands = (
             : element.customData?.fcWrittenText ||
               element.customData?.fcInteractiveResource?.title,
         color: element.strokeColor,
+        writtenGroup: element.customData?.fcWrittenGroup,
         fontSize: element.type === "text" ? element.fontSize : undefined,
         fontFamily: element.type === "text" ? element.fontFamily : undefined,
         opacity: element.opacity,
@@ -233,27 +236,33 @@ export const registerCanvasCommands = (
       const signal =
         args.signal instanceof AbortSignal ? args.signal : undefined;
       signal?.throwIfAborted();
-      const snapshot = classroomCommands.has("document.snapshot")
-        ? await classroomCommands.execute({
-            name: "document.snapshot",
-            args: { capture: args.capture !== false },
-          })
-        : await boardContext(
-            api,
-            !Array.isArray(args.sourceIds) || !args.sourceIds.length,
-            Array.isArray(args.sourceIds) && args.sourceIds.length
-              ? api
-                  .getSceneElements()
-                  .filter(
-                    (element) =>
-                      args.sourceIds &&
-                      (args.sourceIds as string[]).includes(element.id),
-                  )
-              : undefined,
-            contentViewport(api),
-            args.capture !== false,
-          );
+      if (classroomCommands.has("document.snapshot")) {
+        const snapshot = await classroomCommands.execute({
+          name: "document.snapshot",
+          args: { capture: args.capture !== false },
+        });
+        signal?.throwIfAborted();
+        return snapshot;
+      }
+      const ids = Array.isArray(args.sourceIds) ? args.sourceIds : [];
+      const capture = args.capture !== false;
+      const nativeScreen =
+        capture && args.screen === true && Capacitor.isNativePlatform();
+      const snapshot = await boardContext(
+        api,
+        !ids.length,
+        ids.length
+          ? api.getSceneElements().filter((element) => ids.includes(element.id))
+          : undefined,
+        contentViewport(api),
+        capture && !nativeScreen,
+      );
       signal?.throwIfAborted();
+      if (nativeScreen) {
+        const { image } = await NativeClassroom.captureFrame();
+        signal?.throwIfAborted();
+        return { ...snapshot, image };
+      }
       return snapshot;
     }),
     registerResourceCommands(api),
@@ -685,7 +694,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.text",
-      'Insert or update editable text; args.text is required. args.id updates existing text. Without id, insert beside the selection using its color/size. args.presentation=match|handwritten|text; placement=center finds space in the current visible canvas independently of previous selection. For titles use {"text":"complete title","role":"title","presentation":"handwritten","placement":"center","sourceIds":[]}, laid out at 36 screen pixels; body text follows nearby handwriting.',
+      'Insert or update editable text; args.text is required. args.id updates the existing text object or the complete generated handwriting group containing that stroke. Without id, insert beside the selection using its color/size. args.presentation=match|handwritten|text; placement=center finds space in the current visible canvas independently of previous selection. For titles use {"text":"complete title","role":"title","presentation":"handwritten","placement":"center","sourceIds":[]}, laid out at 36 screen pixels; body text follows nearby handwriting. Returns the actual written object IDs, which may change when strokes are replaced.',
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -706,43 +715,48 @@ export const registerCanvasCommands = (
         if (args.role !== undefined && args.role !== "title") {
           throw new Error(t("fcboard.invalid_style_parameters"));
         }
-        if (
-          !args.id &&
-          args.presentation === "handwritten" &&
-          currentSettings().handwritingGeneration === "cloud" &&
-          currentSettings().apiKey.trim()
-        ) {
-          const signal =
-            args.signal instanceof AbortSignal
-              ? args.signal
-              : AbortSignal.timeout(90000);
-          try {
-            await insertGeneratedImage(
-              api,
-              `Render only this exact text as clear handwritten board writing, preserving every character, mathematical symbol and line break. No extra text, illustrations or decorations. Text: ${JSON.stringify(
-                args.text,
-              )}`,
-              signal,
-            );
-            return;
-          } catch (error) {
-            signal.throwIfAborted();
-            if (error instanceof DOMException && error.name === "AbortError") {
-              throw error;
-            }
-          }
-          // A failed optional output provider cannot disable local text writing.
-        }
         if (classroomCommands.has("document.draw")) {
           return classroomCommands.execute({ name: "document.text", args });
         }
         const existing = args.id
           ? api
               .getSceneElements()
-              .find((el) => el.id === args.id && el.type === "text")
+              .find((el) => el.id === args.id && !el.isDeleted)
           : undefined;
-        if (args.id && !existing) {
-          throw new Error(t("fcboard.text_to_edit_not_found"));
+        const presentation = args.presentation as
+          | "match"
+          | "handwritten"
+          | "text"
+          | undefined;
+        if (
+          existing?.type === "freedraw" &&
+          existing.customData?.fcWrittenGroup
+        ) {
+          const group = api
+            .getSceneElements()
+            .filter(
+              (element) =>
+                !element.isDeleted &&
+                element.type === "freedraw" &&
+                element.customData?.fcWrittenGroup ===
+                  existing.customData?.fcWrittenGroup,
+            );
+          if (!handwritingText(group).length) {
+            throw new Error(t("fcboard.text_to_edit_not_found"));
+          }
+          if (group.some((element) => element.locked)) {
+            throw new Error(t("fcboard.selection_unlock_first"));
+          }
+          const ids = insertText(
+            api,
+            args.text,
+            undefined,
+            undefined,
+            group,
+            presentation ?? "match",
+            { mode: "replace" },
+          );
+          return { ids };
         }
         if (existing?.type === "text") {
           const next = convertToFcboardElements(
@@ -768,38 +782,81 @@ export const registerCanvasCommands = (
               .flatMap((el) => (el.id === existing.id ? next : [el])),
             captureUpdate: CaptureUpdateAction.IMMEDIATELY,
           });
-        } else {
-          const source =
-            args.sourceIds !== undefined
-              ? (() => {
-                  const ids = commandObjectIds(
-                    args.sourceIds,
-                    api.getSceneElements(),
-                    true,
-                  );
-                  return api
-                    .getSceneElements()
-                    .filter((element) => ids.has(element.id));
-                })()
-              : selectedBoardElements(api);
-          insertText(
-            api,
-            args.text,
-            undefined,
-            undefined,
-            args.placement === "center" ? undefined : source,
-            args.presentation as "match" | "handwritten" | "text" | undefined,
-            {
-              role: args.role as "title" | undefined,
-              mode:
-                args.placement === "center"
-                  ? "center"
-                  : args.placement === "inline"
-                  ? "inline"
-                  : "below",
-            },
-          );
+          return { ids: [existing.id] };
         }
+        if (args.id) {
+          throw new Error(t("fcboard.text_to_edit_not_found"));
+        }
+        const source =
+          args.sourceIds !== undefined
+            ? (() => {
+                const ids = commandObjectIds(
+                  args.sourceIds,
+                  api.getSceneElements(),
+                  true,
+                );
+                return api
+                  .getSceneElements()
+                  .filter((element) => ids.has(element.id));
+              })()
+            : selectedBoardElements(api);
+        const ids = insertText(
+          api,
+          args.text,
+          undefined,
+          undefined,
+          args.placement === "center" ? undefined : source,
+          presentation,
+          {
+            role: args.role as "title" | undefined,
+            mode:
+              args.placement === "center"
+                ? "center"
+                : args.placement === "inline"
+                ? "inline"
+                : "below",
+          },
+        );
+        return { ids };
+      },
+    ),
+    classroomCommands.register(
+      "image.generate",
+      "Generate and insert a requested illustration in the current board or courseware. args.prompt is the complete description; optional args.transparent requests a transparent background. Use canvas.text for editable writing and canvas.ink for drawings that should remain editable. Returns the inserted image IDs.",
+      async (args) => {
+        if (
+          typeof args.prompt !== "string" ||
+          !args.prompt.trim() ||
+          args.prompt.length > 10000 ||
+          (args.transparent !== undefined &&
+            typeof args.transparent !== "boolean")
+        ) {
+          throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
+        }
+        const signal =
+          args.signal instanceof AbortSignal
+            ? args.signal
+            : AbortSignal.timeout(90000);
+        const ids = await insertGeneratedImage(
+          api,
+          args.prompt.trim(),
+          signal,
+          {
+            transparent: args.transparent === true,
+          },
+        );
+        return { ids };
+      },
+      {
+        parameters: {
+          type: "object",
+          properties: {
+            prompt: { type: "string" },
+            transparent: { type: "boolean" },
+          },
+          required: ["prompt"],
+          additionalProperties: false,
+        },
       },
     ),
     classroomCommands.register(

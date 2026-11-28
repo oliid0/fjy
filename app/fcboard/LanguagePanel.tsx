@@ -12,10 +12,9 @@ import { MaterialPanel } from "./MaterialPanel";
 import { TransientMessage } from "./TransientMessage";
 import { classroomCommands } from "./commands";
 import { boardInk } from "./digitalInk";
-import { selectedBoardElements } from "./ai";
-import { selectionPathBounds, selectionSignature } from "./selection";
+import { selectionSignature } from "./selection";
 import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
-import { currentSettings, SETTINGS_CHANGED } from "./settings";
+import { currentSettings } from "./settings";
 import { createNarrator } from "./narration";
 import { createStudyAudio } from "./studyAudio";
 
@@ -39,7 +38,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
       (stroke) => stroke.language?.group === group && stroke.language.source,
     );
     sourceIds = source.map((stroke) => stroke.id);
-    metadata = source.find((stroke) => stroke.language?.study)?.language;
+    metadata = source.find((stroke) => stroke.language?.signature)?.language;
     signature = languageInkSignature(source.map((stroke) => stroke.points));
   } else {
     const scene = api
@@ -56,17 +55,20 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
         element.customData?.fcLanguage?.source,
     );
     sourceIds = source.map((element) => element.id);
-    metadata = source.find((element) => element.customData?.fcLanguage?.study)
-      ?.customData?.fcLanguage;
+    metadata = source.find(
+      (element) => element.customData?.fcLanguage?.signature,
+    )?.customData?.fcLanguage;
     signature = languageInkSignature(boardInk(source));
   }
-  if (!metadata?.study || !signature || metadata.signature !== signature) {
+  if (!metadata || !signature || metadata.signature !== signature) {
     return;
   }
   try {
     return {
       sourceIds,
-      study: parseLanguageStudy(JSON.stringify(metadata.study), true),
+      study: metadata.study
+        ? parseLanguageStudy(JSON.stringify(metadata.study), true)
+        : undefined,
       targetLanguage: metadata.targetLanguage,
       token: JSON.stringify([
         doc ? [doc.name, doc.page] : api.id,
@@ -92,55 +94,6 @@ const selectionToken = (api: FcboardImperativeAPI, ids: string[]) => {
     : selectionSignature(source as ReturnType<typeof api.getSceneElements>);
 };
 
-/** Selection ownership includes its crop: two words in one object are distinct requests. */
-const readLanguageSelection = (api: FcboardImperativeAPI) => {
-  const state = api.getAppState();
-  const doc = classroomCommands.read("document") as
-    | {
-        tool?: string;
-        selection?: string[];
-        selectionInProgress?: boolean;
-        selectionRegion?: ReturnType<typeof selectionPathBounds>;
-        ink: InkStroke[];
-      }
-    | undefined;
-  if (
-    state.currentItemInkAssist !== "language" ||
-    state.cursorButton === "down" ||
-    doc?.selectionInProgress ||
-    !["selection", "lasso"].includes(doc?.tool || state.activeTool.type)
-  ) {
-    return;
-  }
-  const selected = doc
-    ? doc.ink.filter((stroke) => doc.selection?.includes(stroke.id))
-    : selectedBoardElements(api);
-  const ids = selected.map((item) => item.id);
-  const languageOnly = doc
-    ? (selected as InkStroke[]).every(
-        (stroke) => stroke.fcInk?.assist === "language" || !!stroke.language,
-      )
-    : (selected as ReturnType<typeof api.getSceneElements>).every(
-        (element) =>
-          element.customData?.fcInk?.assist === "language" ||
-          !!element.customData?.fcLanguage,
-      );
-  if (!languageOnly || !ids.length) {
-    return;
-  }
-  const selection = state.whiteboardSelection;
-  const region = doc
-    ? doc.selectionRegion
-    : selection?.elementIds.length === ids.length &&
-      selection.elementIds.every((id) => state.selectedElementIds[id])
-    ? selectionPathBounds(selection.path)
-    : undefined;
-  const source = selectionToken(api, ids);
-  return source
-    ? { ids, region, token: JSON.stringify([source, region || null]) }
-    : undefined;
-};
-
 export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
   const { langCode } = useI18n();
   const [card, setCard] = useState<{
@@ -148,7 +101,6 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
     token: string;
     study?: LanguageStudy;
     ids?: string[];
-    selection?: string;
   }>();
   const [tab, setTab] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -157,14 +109,12 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
   const [audio] = useState(createStudyAudio);
   const [error, setError] = useState("");
   const request = useRef<AbortController | undefined>(undefined);
-  const automaticCard = useRef(false);
   const translations = useRef(new Map<string, LanguageStudy>());
   const close = useCallback(() => {
     request.current?.abort();
     pronunciation.stop();
     audio.clear();
     setSpeaking(false);
-    automaticCard.current = false;
     setCard(undefined);
     setBusy(false);
   }, [audio, pronunciation]);
@@ -182,25 +132,19 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
         "language.card",
         "Open a language learning card for visible args.id or sourceIds; optional region limits OCR to the circled word or sentence. Reads actual source without inserting a translation.",
         async (args) => {
-          const automatic = args.automatic === true;
-          if (automatic && !currentSettings().apiKey.trim()) {
-            throw new DOMException("No configured study service", "AbortError");
-          }
-          const selection = automatic
-            ? readLanguageSelection(api)?.token
-            : undefined;
-          if (automatic && !selection) {
-            throw new DOMException("Language selection changed", "AbortError");
-          }
           const id = typeof args.id === "string" ? args.id : "";
           const ids =
             Array.isArray(args.sourceIds) &&
             args.sourceIds.every((value) => typeof value === "string")
               ? (args.sourceIds as string[])
               : [id];
+          const linked = !args.region
+            ? ids.map((id) => readLanguageCard(api, id))
+            : [];
           const source =
-            !args.region && ids.length === 1
-              ? readLanguageCard(api, ids[0])
+            linked[0] &&
+            linked.every((item) => item?.token === linked[0]?.token)
+              ? linked[0]
               : undefined;
           const token = source?.token || selectionToken(api, ids);
           if (!token) {
@@ -213,29 +157,34 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
           const external =
             args.signal instanceof AbortSignal ? args.signal : undefined;
           external?.throwIfAborted();
-          const abort = () => controller.abort();
+          const abort = () => {
+            controller.abort();
+            if (request.current === controller) {
+              close();
+            }
+          };
           external?.addEventListener("abort", abort, { once: true });
           request.current = controller;
-          automaticCard.current = automatic;
           const target = getLanguage().code;
           const key = `${token}:${JSON.stringify(
             args.region || null,
           )}:${target}`;
-          const readySource =
-            source?.targetLanguage === target && !source.study.backend;
+          const readyStudy =
+            source?.targetLanguage === target && !source.study?.backend
+              ? source?.study
+              : undefined;
           setError("");
           setCard({
             id: ids[0],
             token,
-            selection,
-            study: readySource ? source.study : undefined,
+            study: readyStudy,
             ids: source ? undefined : ids,
           });
-          setBusy(!readySource && !translations.current.has(key));
+          setBusy(!readyStudy && !translations.current.has(key));
           try {
             let study: LanguageStudy;
-            if (readySource) {
-              study = source.study;
+            if (readyStudy) {
+              study = readyStudy;
             } else if (translations.current.has(key)) {
               study = translations.current.get(key)!;
             } else {
@@ -252,16 +201,12 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
               })) as { study: LanguageStudy };
               study = parseLanguageStudy(JSON.stringify(result.study), true);
             }
-            if (automatic && !currentSettings().apiKey.trim()) {
-              controller.abort();
-            }
             controller.signal.throwIfAborted();
             if (
               (source
                 ? readLanguageCard(api, ids[0])?.token
                 : selectionToken(api, ids)) !== token ||
-              target !== getLanguage().code ||
-              (automatic && readLanguageSelection(api)?.token !== selection)
+              target !== getLanguage().code
             ) {
               throw new DOMException("Language ink changed", "AbortError");
             }
@@ -273,7 +218,6 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
             setCard({
               id: ids[0],
               token,
-              selection,
               study,
               ids: source ? undefined : ids,
             });
@@ -305,11 +249,9 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
     const changed = () => {
       if (
         card &&
-        ((card.selection &&
-          readLanguageSelection(api)?.token !== card.selection) ||
-          (card.ids
-            ? selectionToken(api, card.ids)
-            : readLanguageCard(api, card.id)?.token) !== card.token)
+        (card.ids
+          ? selectionToken(api, card.ids)
+          : readLanguageCard(api, card.id)?.token) !== card.token
       ) {
         close();
       }
@@ -321,74 +263,6 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
     ];
     return () => stops.forEach((stop) => stop());
   }, [api, card, close]);
-  useEffect(() => {
-    let previous = "";
-    let keyAvailable = !!currentSettings().apiKey.trim();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const refresh = () => {
-      if (!currentSettings().apiKey.trim()) {
-        previous = "";
-        if (automaticCard.current) {
-          close();
-        }
-        return;
-      }
-      const selected = readLanguageSelection(api);
-      if (!selected) {
-        previous = "";
-        if (automaticCard.current) {
-          close();
-        }
-        return;
-      }
-      const { ids, region, token } = selected;
-      if (token === previous) {
-        return;
-      }
-      previous = token;
-      void classroomCommands
-        .execute({
-          name: "language.card",
-          args: { sourceIds: ids, region, automatic: true },
-        })
-        .catch((failure) => {
-          if ((failure as Error).name !== "AbortError") {
-            setError(
-              failure instanceof Error ? failure.message : String(failure),
-            );
-          }
-        });
-    };
-    const schedule = () => {
-      clearTimeout(timer);
-      timer = setTimeout(refresh, 120);
-    };
-    const changedSettings = () => {
-      const available = !!currentSettings().apiKey.trim();
-      if (available === keyAvailable) {
-        return;
-      }
-      keyAvailable = available;
-      previous = "";
-      if (!available) {
-        if (automaticCard.current) {
-          close();
-        }
-      } else {
-        schedule();
-      }
-    };
-    window.addEventListener(SETTINGS_CHANGED, changedSettings);
-    const stops = [
-      api.onChange(schedule),
-      classroomCommands.watch("document", schedule),
-    ];
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener(SETTINGS_CHANGED, changedSettings);
-      stops.forEach((stop) => stop());
-    };
-  }, [api, close]);
   return (
     <>
       {card && (

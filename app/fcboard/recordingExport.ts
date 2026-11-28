@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { getDataURL } from "@fcboard/fcboard/data/blob";
 
 import { timestamp } from "./recording";
+import { transcriptText } from "./speech";
 
 import type { Recording } from "./recording";
 
@@ -25,7 +26,7 @@ const engine = registerPlugin<{
 export const recordingFiles = (recording: Recording) => {
   const name = `Fcboard-${recording.id}`;
   const transcript = recording.transcript
-    .map((line) => `[${timestamp(line.time)}] ${line.text}`)
+    .map((line) => `[${timestamp(line.time)}] ${transcriptText(line)}`)
     .join("\n");
   return [
     new File(
@@ -51,7 +52,7 @@ export const prepareRecordingPackage = async (
     size: recording.blob.size,
     mime: recording.blob.type,
     transcript: recording.transcript
-      .map((line) => `[${timestamp(line.time)}] ${line.text}`)
+      .map((line) => `[${timestamp(line.time)}] ${transcriptText(line)}`)
       .join("\n"),
     summary: recording.summary,
   });

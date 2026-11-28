@@ -15,6 +15,7 @@ export type Recording = {
   mode: RecordingMode;
   blob: Blob;
   transcript: TranscriptLine[];
+  cloudTranscript?: boolean;
   summary: string;
 };
 const store = createStore("fcboard-recordings", "sessions");

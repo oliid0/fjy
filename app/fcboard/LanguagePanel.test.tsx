@@ -20,6 +20,7 @@ import type { LocalPoint } from "@fcboard/math";
 import { render } from "./test/render";
 import { languageStudy } from "./test/language";
 import { LanguagePanel, readLanguageCard } from "./LanguagePanel";
+import { SelectionActions } from "./SelectionActions";
 
 import { registerLanguageCommands } from "./languageCommands";
 import { observeInkAssistance } from "./inkAssistance";
@@ -80,7 +81,11 @@ const setup = () => {
   );
   const chat = vi
     .spyOn(ai, "chat")
-    .mockResolvedValue(JSON.stringify(languageStudy));
+    .mockImplementation(async (messages) =>
+      String(messages[0].content).includes("Output the translation alone")
+        ? languageStudy.translation
+        : JSON.stringify(languageStudy),
+    );
   const error = vi.fn();
   const stopTranslate = registerLanguageCommands(api);
   const stopObserve = observeInkAssistance(api, vi.fn(), error);
@@ -220,11 +225,7 @@ it("copies a bilingual object with an independent card and never exposes hidden-
     )!;
     api.updateScene({ elements: copies });
     expect(copy.customData?.fcLanguage.group).not.toBe(originalGroup);
-    expect(readLanguageCard(api, copy.id)?.study).toMatchObject({
-      term: languageStudy.term,
-      translation: languageStudy.translation,
-      backend: "translation",
-    });
+    expect(readLanguageCard(api, copy.id)?.sourceIds).toEqual([copy.id]);
     expect(readLanguageCard(api, source.id)).toBeUndefined();
     const stop = classroomCommands.context("document", () => ({
       name: "slides.pdf",
@@ -259,7 +260,7 @@ it("discards a translation when its source is erased while the model is still re
     expect(chat).toHaveBeenCalledTimes(1);
     api.updateScene({ elements: [] });
     await act(async () => {
-      resolve(JSON.stringify(languageStudy));
+      resolve(languageStudy.translation);
       await Promise.resolve();
     });
     expect(api.getSceneElements()).toHaveLength(0);
@@ -361,7 +362,12 @@ it("opens a language card through the selection tool without drawing a language-
   host.chat.mockResolvedValue(
     JSON.stringify({ ...languageStudy, synonyms: ["a similar expression"] }),
   );
-  const view = render(<LanguagePanel api={host.api} />);
+  const view = render(
+    <>
+      <LanguagePanel api={host.api} />
+      <SelectionActions api={host.api} onPlot={vi.fn()} onRequest={vi.fn()} />
+    </>,
+  );
   try {
     Object.assign(host.api.getAppState(), {
       activeTool: {
@@ -375,6 +381,13 @@ it("opens a language card through the selection tool without drawing a language-
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(host.chat).not.toHaveBeenCalled();
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.learning_card") }),
+      ),
+    );
     expect(
       screen.getByRole("dialog", { name: t("fcboard.language_study") }),
     ).toBeVisible();
@@ -507,63 +520,6 @@ it("keeps ordinary and mixed object selections as movable objects while language
   }
 });
 
-it("closes and cancels an automatic card when its API key is removed and ignores the late response", async () => {
-  vi.useFakeTimers();
-  const host = setup();
-  const [word] = convertToFcboardElements([
-    {
-      type: "text",
-      text: "inertia",
-      x: 220,
-      y: 150,
-      customData: { fcInk: { version: 2, pen: "hard", assist: "language" } },
-    },
-  ]);
-  let finish!: (response: string) => void;
-  host.chat.mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
-  const view = render(<LanguagePanel api={host.api} />);
-  try {
-    Object.assign(host.api.getAppState(), {
-      activeTool: {
-        ...host.api.getAppState().activeTool,
-        type: "lasso",
-        customType: null,
-      },
-      selectedElementIds: { [word.id]: true },
-    });
-    act(() => host.api.updateScene({ elements: [word] }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(800);
-    });
-    expect(host.chat).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getByRole("dialog", { name: t("fcboard.language_study") }),
-    ).toBeVisible();
-    act(() => saveSettings({ ...defaults, apiKey: "" }, false));
-    expect((host.chat.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
-    expect(
-      screen.queryByRole("dialog", { name: t("fcboard.language_study") }),
-    ).toBeNull();
-    await act(async () => {
-      finish(JSON.stringify(languageStudy));
-      await vi.advanceTimersByTimeAsync(200);
-    });
-    expect(
-      screen.queryByRole("dialog", { name: t("fcboard.language_study") }),
-    ).toBeNull();
-    expect(host.api.getSceneElements()).toEqual([word]);
-  } finally {
-    finish?.(JSON.stringify(languageStudy));
-    view.unmount();
-    host.release();
-  }
-});
-
 it("crops different circled words inside the same sentence object and caches each actual region separately", async () => {
   vi.useFakeTimers();
   const host = setup();
@@ -581,8 +537,17 @@ it("crops different circled words inside the same sentence object and caches eac
     .mockResolvedValueOnce(
       JSON.stringify({ ...languageStudy, term: "inertia" }),
     );
-  const view = render(<LanguagePanel api={host.api} />);
+  const view = render(
+    <>
+      <LanguagePanel api={host.api} />
+      <SelectionActions api={host.api} onPlot={vi.fn()} onRequest={vi.fn()} />
+    </>,
+  );
   const select = async (left: number, right: number) => {
+    const previous = screen.queryByRole("dialog");
+    if (previous) {
+      fireEvent.doubleClick(previous);
+    }
     act(() =>
       host.api.updateScene({
         elements: [sentence],
@@ -606,9 +571,11 @@ it("crops different circled words inside the same sentence object and caches eac
         },
       }),
     );
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(130);
-    });
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.learning_card") }),
+      ),
+    );
   };
   try {
     await select(90, 200);
@@ -661,7 +628,12 @@ it("immediately aborts an old crop when the same source is circled elsewhere and
     .mockResolvedValueOnce(
       JSON.stringify({ ...languageStudy, term: "inertia" }),
     );
-  const view = render(<LanguagePanel api={host.api} />);
+  const view = render(
+    <>
+      <LanguagePanel api={host.api} />
+      <SelectionActions api={host.api} onPlot={vi.fn()} onRequest={vi.fn()} />
+    </>,
+  );
   const select = (left: number) =>
     host.api.updateScene({
       elements: [sentence],
@@ -686,15 +658,19 @@ it("immediately aborts an old crop when the same source is circled elsewhere and
     });
   try {
     act(() => select(90));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(130);
-    });
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.learning_card") }),
+      ),
+    );
     expect(screen.getByRole("progressbar")).toBeVisible();
     act(() => select(220));
     expect((host.chat.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(130);
-    });
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.learning_card") }),
+      ),
+    );
     expect(screen.getByRole("dialog")).toHaveTextContent("inertia");
     await act(async () => {
       finish(JSON.stringify({ ...languageStudy, term: "force" }));

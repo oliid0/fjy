@@ -84,6 +84,7 @@ afterEach(() => {
 const setup = async (
   mode?: AppState["currentItemInkAssist"],
   preferences: Partial<AppState> = {},
+  pageCount = 1,
 ) => {
   vi.stubGlobal(
     "ResizeObserver",
@@ -131,7 +132,10 @@ const setup = async (
   } as unknown as FcboardImperativeAPI;
   vi.spyOn(documentReader, "openDocumentReader").mockImplementation(
     async () => ({
-      pages: [{ index: 0, name: "1" }],
+      pages: Array.from({ length: pageCount }, (_, index) => ({
+        index,
+        name: String(index + 1),
+      })),
       showThumbnails: false,
       render: async () => ({
         ratio: 1000 / 600,
@@ -212,6 +216,30 @@ const setup = async (
   };
   return { ...view, api, update, svg, pointer, draw };
 };
+
+it("returns actual rendered courseware page changes and reports both boundaries", async () => {
+  const { unmount } = await setup(undefined, {}, 2);
+  try {
+    await expect(
+      classroomCommands.execute({ name: "document.previous" }),
+    ).resolves.toEqual({ changed: false, page: 1, boundary: "first" });
+    await act(async () => {
+      await expect(
+        classroomCommands.execute({ name: "document.next" }),
+      ).resolves.toEqual({ changed: true, page: 2 });
+    });
+    await expect(
+      classroomCommands.execute({ name: "document.next" }),
+    ).resolves.toEqual({ changed: false, page: 2, boundary: "last" });
+    await act(async () => {
+      await expect(
+        classroomCommands.execute({ name: "document.previous" }),
+      ).resolves.toEqual({ changed: true, page: 1 });
+    });
+  } finally {
+    unmount();
+  }
+});
 
 it("exposes live original-document ink, applies peer text through the actual editor, follows host navigation and saves the received content", async () => {
   const { pointer, svg, unmount } = await setup();
@@ -377,6 +405,7 @@ it("translates courseware ink on the visible page, opens and hides its card, and
   vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(languageStudy.term);
   const chat = vi
     .spyOn(ai, "chat")
+    .mockResolvedValueOnce(languageStudy.translation)
     .mockResolvedValue(JSON.stringify(languageStudy));
   const { api, draw, svg, unmount } = await setup("language");
   const stopTranslate = registerLanguageCommands(api);
@@ -405,11 +434,7 @@ it("translates courseware ink on the visible page, opens and hides its card, and
     );
     expect(translation.fontSize).toBeLessThanOrEqual(40);
     expect(api.getSceneElements()).toHaveLength(0);
-    expect(readLanguageCard(api, source.id)?.study).toMatchObject({
-      term: languageStudy.term,
-      translation: languageStudy.translation,
-      backend: "translation",
-    });
+    expect(readLanguageCard(api, source.id)?.sourceIds).toEqual([source.id]);
     fireEvent.doubleClick(svg.querySelector(`[data-language="${source.id}"]`)!);
     await screen.findByRole("dialog", { name: t("fcboard.language_study") });
     await screen.findByRole("tab", { name: t("fcboard.language_study") });
@@ -426,11 +451,7 @@ it("translates courseware ink on the visible page, opens and hides its card, and
     await act(async () => {
       await classroomCommands.execute({ name: "document.redo" });
     });
-    expect(readLanguageCard(api, source.id)?.study).toMatchObject({
-      term: languageStudy.term,
-      translation: languageStudy.translation,
-      backend: "translation",
-    });
+    expect(readLanguageCard(api, source.id)?.sourceIds).toEqual([source.id]);
   } finally {
     panel.unmount();
     stopTranslate();
@@ -1694,6 +1715,60 @@ it("centers voice writing on the visible courseware without inheriting a previou
   expect(update).not.toHaveBeenCalled();
 });
 
+it("rewrites an unselected courseware title at its edited position and size", async () => {
+  const { api, update } = await setup();
+  const stop = registerCanvasCommands(api);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.text",
+        args: {
+          text: "旧标题",
+          role: "title",
+          presentation: "handwritten",
+          placement: "center",
+        },
+      });
+    });
+    const id = currentInk()[0].id;
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.resize",
+        args: { ids: [id], scale: 1.5 },
+      });
+      await classroomCommands.execute({
+        name: "canvas.move",
+        args: { ids: [id], dx: 40, dy: 20 },
+      });
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [] },
+      });
+    });
+    const original = currentInk()[0];
+    await act(async () => {
+      await expect(
+        classroomCommands.execute({
+          name: "canvas.text",
+          args: { id, text: "改过的标题" },
+        }),
+      ).resolves.toEqual({ ids: [id] });
+    });
+    expect(currentInk()).toMatchObject([
+      {
+        id,
+        text: "改过的标题",
+        points: original.points,
+        fontSize: original.fontSize,
+        fontFamily: original.fontFamily,
+      },
+    ]);
+    expect(update).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
+});
+
 it("drops centered writing when voice is stopped during font loading", async () => {
   await setup();
   let ready!: () => void;
@@ -2425,7 +2500,7 @@ it("applies courseware border/fill/alpha as one undo, and performs actual hierar
   }
 });
 
-it("runs Creative from a real courseware selection and replaces the visible one-based page without another recognition step", async () => {
+it("runs Creative from a real courseware selection and replaces the visible one-based page using the image-only route", async () => {
   const { api, draw, pointer, unmount } = await setup();
   const stop = registerCanvasCommands(api);
   vi.spyOn(documentTools, "inkSnapshot").mockResolvedValue(
@@ -2435,6 +2510,9 @@ it("runs Creative from a real courseware selection and replaces the visible one-
     "data:image/png;base64,selected" as DataURL,
   );
   const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  const classify = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValue(JSON.stringify({ prompt: "", drawing: true }));
   const generate = vi
     .spyOn(imageGeneration, "generateImage")
     .mockResolvedValue({
@@ -2460,9 +2538,15 @@ it("runs Creative from a real courseware selection and replaces the visible one-
     pointer("pointermove", 70, 190);
     pointer("pointerup", 70, 70);
     fireEvent.click(await screen.findByRole("button", { name: "AI" }));
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: t("fcboard.selection_creative") }),
-    );
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: t("fcboard.selection_creative") }),
+      );
+      await act(async () => vi.advanceTimersByTimeAsync(2000));
+    } finally {
+      vi.useRealTimers();
+    }
     await waitFor(() =>
       expect(
         (classroomCommands.read("document") as { ink: InkStroke[] }).ink.some(
@@ -2470,6 +2554,7 @@ it("runs Creative from a real courseware selection and replaces the visible one-
         ),
       ).toBe(true),
     );
+    expect(classify).toHaveBeenCalledTimes(1);
     expect(generate).toHaveBeenCalledTimes(1);
     expect(generate).toHaveBeenCalledWith(
       expect.any(String),
@@ -3008,7 +3093,12 @@ it("uses the actual courseware circle for a word card while keeping whole-object
     .mockResolvedValue(JSON.stringify({ ...languageStudy, term: "Force" }));
   const host = await setup("language");
   const stop = registerLanguageCommands(host.api);
-  const panel = render(<LanguagePanel api={host.api} />);
+  const panel = render(
+    <>
+      <LanguagePanel api={host.api} />
+      <SelectionActions api={host.api} onPlot={vi.fn()} onRequest={vi.fn()} />
+    </>,
+  );
   const context = () =>
     classroomCommands.read("document") as {
       selection: string[];
@@ -3039,6 +3129,11 @@ it("uses the actual courseware circle for a word card while keeping whole-object
       bottom: 125,
     });
     expect(context().region[1][0]).toBeGreaterThan(200);
+    expect(chat).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.learning_card") }),
+    );
     await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
     expect(snapshot).toHaveBeenCalledWith([sentence], 17, undefined, 108);
     expect(crop).toHaveBeenCalledWith(

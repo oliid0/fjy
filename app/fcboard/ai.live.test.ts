@@ -11,7 +11,12 @@ import { recognizeInkContent } from "./inkRecognition";
 import { insertGeneratedImage } from "./imageGeneration";
 import { sceneAPI } from "./test/scene";
 import { registerCanvasCommands } from "./canvasCommands";
+import { registerBoardAgents } from "./boardAgents";
 import { agentResponsesEndpoint, runResponsesAgent } from "./responsesAgent";
+import { classroomCommands } from "./commands";
+import { runVoiceAgent } from "./voiceAgent";
+
+import type { BoardTask } from "./boardAgents";
 
 /** Opt-in only: never sends requests during ordinary tests or without a supplied key. */
 const live = process.env.FCBOARD_LIVE === "1" && !!process.env.hs_apikey;
@@ -81,6 +86,20 @@ const observeStream = async (
 
 const nativeFetch = globalThis.fetch;
 const settings = () => ({ ...defaults, apiKey: process.env.hs_apikey || "" });
+
+class PngDimensions {
+  naturalWidth = 0;
+  naturalHeight = 0;
+  src = "";
+
+  async decode() {
+    const bytes = Buffer.from(this.src.split(",")[1], "base64");
+    expect(bytes.subarray(1, 4).toString()).toBe("PNG");
+    expect(bytes.subarray(12, 16).toString()).toBe("IHDR");
+    this.naturalWidth = bytes.readUInt32BE(16);
+    this.naturalHeight = bytes.readUInt32BE(20);
+  }
+}
 
 it.runIf(live)(
   "LIVE: continues native Responses function calls until actual editable pen work is complete",
@@ -283,6 +302,128 @@ it.runIf(live)(
 );
 
 it.runIf(live)(
+  "LIVE: turns the requested page and answers from newly captured pixels",
+  async () => {
+    const started = Date.now();
+    saveSettings(
+      {
+        ...settings(),
+        speech: "cloud",
+        ocrModel: "doubao-seed-2-1-lite-260915",
+      },
+      false,
+    );
+    let page = 1;
+    const capture = vi.fn(() => ({
+      name: "测量工具.pdf",
+      page,
+      text: "",
+      image: page === 2 ? protractor.gray.dataURL : undefined,
+    }));
+    const next = vi.fn((args: Record<string, unknown>) => {
+      page = 2;
+      classroomCommands.touch(args.signal as AbortSignal);
+      return { changed: true, page };
+    });
+    const releases = [
+      classroomCommands.register("canvas.snapshot", "@internal", capture),
+      classroomCommands.register(
+        "document.next",
+        "Turn the current document to its next page.",
+        next,
+      ),
+      classroomCommands.context("document", () => ({
+        id: "measurement",
+        page,
+      })),
+    ];
+    try {
+      const captions = vi.fn();
+      const turn = new AbortController();
+      const answer = await runVoiceAgent(
+        "请用 document.next 翻到下一页。然后看新页面上的工具是什么，只用中文回答名称。",
+        [],
+        turn.signal,
+        turn.signal,
+        captions,
+      );
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(
+        capture.mock.results.some(
+          ({ value }) => value?.page === 2 && !!value.image,
+        ),
+      ).toBe(true);
+      expect(answer).toContain("量角器");
+      expect(captions).toHaveBeenLastCalledWith(
+        expect.stringContaining("量角器"),
+      );
+      reports.voicePageVision = {
+        success: true,
+        page,
+        elapsedMs: Date.now() - started,
+      };
+    } finally {
+      releases.forEach((release) => release());
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  },
+  100000,
+);
+
+it.runIf(live)(
+  "LIVE: voice starts an illustration task and the real service inserts its returned image ID",
+  async () => {
+    const started = Date.now();
+    saveSettings({ ...settings(), speech: "cloud" }, false);
+    vi.stubGlobal("Image", PngDimensions);
+    const api = sceneAPI();
+    const stopCommands = registerCanvasCommands(api);
+    const stopTasks = registerBoardAgents();
+    const turn = new AbortController();
+    try {
+      await runVoiceAgent(
+        "只调用一次 board_image，生成一张深蓝背景的月球科普插图并插入白板。提交后保持可以继续对话。",
+        [],
+        turn.signal,
+      );
+      const tasks = (await classroomCommands.execute({
+        name: "agent.inspect",
+      })) as BoardTask[];
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].command).toBe("image.generate");
+      const task = (await classroomCommands.execute({
+        name: "agent.wait",
+        args: { id: tasks[0].id, signal: AbortSignal.timeout(90000) },
+      })) as BoardTask;
+      const images = api
+        .getSceneElements()
+        .filter((element) => element.type === "image");
+      expect(images).toHaveLength(1);
+      expect(task.result).toEqual({ ids: [images[0].id] });
+      expect(
+        traces.some(
+          ({ model, status }) =>
+            model === settings().imageModel && status === 200,
+        ),
+      ).toBe(true);
+      reports.voiceImage = {
+        success: true,
+        elapsedMs: Date.now() - started,
+        width: images[0].width,
+      };
+    } finally {
+      turn.abort();
+      stopTasks();
+      stopCommands();
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  },
+  180000,
+);
+
+it.runIf(live)(
   "LIVE: researches and generates ten answerable high-school math cards using the actual quiz agent",
   async () => {
     const started = Date.now();
@@ -339,21 +480,7 @@ it.runIf(live).each(["text", "drawing"])(
     }
     expect(recognized.image).toBe(input);
     expect(recognized.prompt).toContain("若没有文字要求，仅按图生图");
-    vi.stubGlobal(
-      "Image",
-      class {
-        naturalWidth = 0;
-        naturalHeight = 0;
-        src = "";
-        async decode() {
-          const bytes = Buffer.from(this.src.split(",")[1], "base64");
-          expect(bytes.subarray(1, 4).toString()).toBe("PNG");
-          expect(bytes.subarray(12, 16).toString()).toBe("IHDR");
-          this.naturalWidth = bytes.readUInt32BE(16);
-          this.naturalHeight = bytes.readUInt32BE(20);
-        }
-      },
-    );
+    vi.stubGlobal("Image", PngDimensions);
     const api = sceneAPI();
     const requestCount = traces.length;
     const source = api.getSceneElements().map((element) => element.id);

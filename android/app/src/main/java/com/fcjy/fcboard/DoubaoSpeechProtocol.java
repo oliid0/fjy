@@ -27,15 +27,16 @@ final class DoubaoSpeechProtocol {
             .put((byte) 0x11).put((byte) 0).putInt(sequence).putInt(body.length).put(body).array();
     }
 
-    static byte[] configuration() throws Exception {
+    static byte[] configuration(boolean separateSpeakers) throws Exception {
+        JSONObject request = new JSONObject().put("model_name", "bigmodel")
+            .put("enable_nonstream", true).put("enable_itn", true).put("enable_lid", true)
+            .put("show_utterances", true).put("result_type", "full").put("end_window_size", 800);
+        if (separateSpeakers) { request.put("enable_speaker_info", true); }
         return new JSONObject()
             .put("user", new JSONObject().put("uid", "fcboard"))
             .put("audio", new JSONObject().put("format", "pcm").put("codec", "raw")
                 .put("rate", 16000).put("bits", 16).put("channel", 1))
-            .put("request", new JSONObject().put("model_name", "bigmodel")
-                .put("enable_nonstream", true).put("enable_itn", true).put("enable_lid", true)
-                .put("show_utterances", true).put("result_type", "full")
-                .put("end_window_size", 800))
+            .put("request", request)
             .toString().getBytes(StandardCharsets.UTF_8);
     }
 
@@ -104,7 +105,11 @@ final class DoubaoSpeechProtocol {
                 if (text.isEmpty() || start < 0 || end < start || end < latestEnd || !delivered.add(id)) { continue; }
                 latestEnd = Math.max(latestEnd, end);
                 if (delivered.size() > 1000) { delivered.clear(); delivered.add(id); }
-                lines.put(new JSONObject().put("time", start / 1000.0).put("text", text));
+                JSONObject line = new JSONObject().put("time", start / 1000.0).put("text", text);
+                JSONObject additions = utterance.optJSONObject("additions");
+                String speaker = additions == null ? "" : additions.optString("speaker_id", "").trim();
+                if (!speaker.isEmpty() && speaker.length() <= 80) { line.put("speaker", speaker); }
+                lines.put(line);
             }
         }
         return lines;

@@ -153,6 +153,57 @@ it("uses an unchanged native microphone session when its current document frame 
   }
 });
 
+it("sends the new courseware frame and tools before returning the page action", async () => {
+  mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
+  let page = 1;
+  const visualFrame = vi.fn(async (previous?: string) => {
+    const stamp = `courseware:${page}`;
+    if (previous !== stamp) {
+      return { stamp, image: `data:image/jpeg;base64,page-${page}` };
+    }
+  });
+  const releases = [
+    classroomCommands.context("document", () => ({ name: "lesson.pdf", page })),
+    classroomCommands.register("document.next", "Next page", (args) => {
+      page++;
+      classroomCommands.invalidate(args.signal as AbortSignal);
+      return { changed: true, page };
+    }),
+  ];
+  const handle = await startDuplexSpeech({ ...callbacks(), visualFrame });
+  try {
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [call("next", "document.next")],
+    });
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
+    const events = mocks.engine.send.mock.calls.map(
+      ([message]) => message.event,
+    );
+    const updated = events.findIndex(
+      (event) =>
+        event.type === "session.update" &&
+        event.session.instructions.includes("page 2"),
+    );
+    const image = events.findIndex(
+      (event) =>
+        event.type === "input_image_buffer.append" && event.image === "page-2",
+    );
+    expect(updated).toBeGreaterThanOrEqual(0);
+    expect(image).toBeGreaterThan(updated);
+    expect(image).toBeLessThan(events.indexOf(toolReplies()[0]));
+    expect(JSON.parse(toolReplies()[0].items[0].content[0].text)).toMatchObject(
+      {
+        ok: true,
+        result: { changed: true, page: 2 },
+      },
+    );
+  } finally {
+    await handle.cancel();
+    releases.forEach((stop) => stop());
+  }
+});
+
 it("recovers native-only input and tool-result sending without a WebView capture handle", async () => {
   mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
   const view = callbacks();
@@ -357,7 +408,12 @@ it("acknowledges long board work immediately and speaks explicit task text while
   try {
     emit({
       type: "response.function_call_arguments.done",
-      items: [call("experiment", "experiment.run")],
+      items: [
+        call("experiment", "agent.start", {
+          prompt: "Run the independent experiment",
+          command: { name: "experiment.run", args: {} },
+        }),
+      ],
     });
     await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
     expect(
@@ -680,7 +736,9 @@ it("executes an independent later tool while an earlier call is unfinished, pres
 
 it("acknowledges long resource work immediately and keeps typed drawing and conversation live", async () => {
   let finish!: () => void;
-  const draw = vi.fn((args) => ({ strokes: args.strokes }));
+  const draw = vi.fn((_args: Record<string, unknown>) => ({
+    ids: ["apple-stroke"],
+  }));
   const releases = [
     classroomCommands.register(
       "resources.generate",
@@ -733,7 +791,7 @@ it("acknowledges long resource work immediately and keeps typed drawing and conv
     expect(JSON.parse(toolReplies()[1].items[0].content[0].text)).toMatchObject(
       {
         ok: true,
-        result: { state: "running", command: "canvas.ink" },
+        result: { ids: ["apple-stroke"] },
       },
     );
     await vi.waitFor(() =>

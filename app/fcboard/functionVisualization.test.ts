@@ -1,5 +1,6 @@
 import { defaultPlot, functionView } from "./math";
 import { validatedPlot } from "./mathRecognition";
+import { vegaFunctionImage, vegaFunctionSpec } from "./vegaFunctionGraph";
 import {
   drawFunctionGraph,
   functionColors,
@@ -157,5 +158,22 @@ it("allows zooming across an empty domain and rejects corrupt or unbounded saved
     { left: NaN, right: 1, bottom: -1, top: 1 },
   ]) {
     expect(() => validatedPlot({ ...defaultPlot, view })).toThrow();
+  }
+});
+
+it("renders separate reciprocal branches through Vega and produces a PNG preview", async () => {
+  const plot = { ...defaultPlot, expression: "1/x" };
+  const { createInlineVegaView } = await import(
+    "@fcboard/fcboard/visualizationRuntime"
+  );
+  const view = createInlineVegaView(vegaFunctionSpec(plot));
+  try {
+    const svg = await view.toSVG();
+    const image = new DOMParser().parseFromString(svg, "image/svg+xml");
+    expect(image.querySelectorAll("path[stroke='#2563eb']")).toHaveLength(2);
+    expect(image.querySelector(".role-axis")).not.toBeNull();
+    expect(await vegaFunctionImage(plot)).toMatch(/^data:image\/png;base64,/);
+  } finally {
+    view.finalize();
   }
 });

@@ -17,10 +17,12 @@ export type SelectionAIAction = "question" | "creative" | "quiz";
 
 /** layout_select_ai + e.R0: same trigger toggles; opening outside closes this child. */
 export const SelectionAI = ({
+  owner,
   pending,
   onCancel,
   onAction,
 }: {
+  owner: string;
   pending: boolean;
   onCancel: () => void;
   onAction: (action: SelectionAIAction) => void;
@@ -60,6 +62,7 @@ export const SelectionAI = ({
           )}
         </ButtonBase>
         <Popper
+          data-fcboard-owner={owner}
           open={open && !pending}
           anchorEl={anchor.current}
           placement="bottom"

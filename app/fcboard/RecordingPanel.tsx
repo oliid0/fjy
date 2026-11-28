@@ -22,6 +22,7 @@ import {
 import { SummaryText } from "./SummaryText";
 import { RecordingActions } from "./RecordingActions";
 import { timestamp } from "./recording";
+import { transcriptText } from "./speech";
 
 import type { Recording, RecordingMode } from "./recording";
 import type { TranscriptLine } from "./speech";
@@ -49,6 +50,7 @@ export const RecordingPanel = (props: {
   interim?: TranscriptLine | null;
   busy: boolean;
   controlBusy: boolean;
+  manualStart: boolean;
   onStart: () => void;
   onStop: () => void;
   onPause: () => void;
@@ -160,6 +162,7 @@ export const RecordingPanel = (props: {
           disableElevation
           startIcon={microphoneIcon}
           disabled={props.busy}
+          data-fcboard-manual-only={props.manualStart ? "true" : undefined}
           onClick={props.onStart}
         >
           {t("fcboard.start_recording")}
@@ -313,7 +316,7 @@ export const RecordingPanel = (props: {
                         }}
                       >
                         <time>{timestamp(line.time)}</time>
-                        <span>{line.text}</span>
+                        <span>{transcriptText(line)}</span>
                       </Button>
                     ))
                   ) : (
@@ -393,7 +396,9 @@ export const RecordingPanel = (props: {
             onClick={() => {
               setNotes(
                 lines
-                  .map((line) => `${timestamp(line.time)} ${line.text}`)
+                  .map(
+                    (line) => `${timestamp(line.time)} ${transcriptText(line)}`,
+                  )
                   .join("\n"),
               );
               setEditing(true);

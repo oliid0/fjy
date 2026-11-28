@@ -996,3 +996,66 @@ it("commits parallel ink styles independently and preserves existing objects on 
     stop();
   }
 });
+
+it("draws and partially erases ink at inspected viewport coordinates on a panned board", async () => {
+  const api = sceneAPI();
+  api.updateScene({ elements: [] });
+  const state = api.getAppState();
+  api.getAppState = () => ({
+    ...state,
+    zoom: { value: getNormalizedZoom(2) },
+    scrollX: 140,
+    scrollY: 30,
+  });
+  const release = registerCanvasCommands(api);
+  try {
+    const { viewport, revision } = (await classroomCommands.execute({
+      name: "canvas.inspect",
+    })) as { viewport: ReturnType<typeof contentViewport>; revision: number };
+    const coordinates = { coordinateSpace: "viewport", revision };
+    const strokes = [
+      [
+        [150, 400],
+        [850, 400],
+      ],
+    ];
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.ink",
+        args: { ...coordinates, revision: revision - 1, strokes },
+      }),
+    ).rejects.toThrow();
+    expect(api.getSceneElements()).toHaveLength(0);
+    await classroomCommands.execute({
+      name: "canvas.ink",
+      args: { ...coordinates, strokes },
+    });
+    const element = api.getSceneElements()[0];
+    expect(element).toMatchObject({ type: "freedraw" });
+    expect(element.x).toBeCloseTo(
+      viewport.left + 0.15 * (viewport.right - viewport.left),
+    );
+    expect(element.y).toBeCloseTo(
+      viewport.top + 0.4 * (viewport.bottom - viewport.top),
+    );
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.erase",
+        args: {
+          ...coordinates,
+          region: [
+            [400, 300],
+            [600, 300],
+            [600, 500],
+            [400, 500],
+          ],
+        },
+      }),
+    ).resolves.toEqual({ changed: true });
+    const fragments = api.getSceneElements().filter((item) => !item.isDeleted);
+    expect(fragments).toHaveLength(2);
+    expect(fragments.every((item) => item.type === "freedraw")).toBe(true);
+  } finally {
+    release();
+  }
+});

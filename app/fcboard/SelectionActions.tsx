@@ -687,12 +687,12 @@ export const SelectionActions = ({
               clear();
               reject(signal.reason);
             };
-            const settle = () => {
+            const settle = (delay = 2000) => {
               clearTimeout(timer);
               timer = setTimeout(() => {
                 clear();
                 resolve();
-              }, 2000);
+              }, delay);
             };
             const changed = () => {
               const next = JSON.stringify(currentInk());
@@ -705,7 +705,17 @@ export const SelectionActions = ({
               ? classroomCommands.watch("document", changed)
               : api.onChange(changed);
             signal.addEventListener("abort", abort, { once: true });
-            settle();
+            const lastInk = Math.max(
+              0,
+              ...snapshot.source
+                .filter((element) => element.type === "freedraw")
+                .map((element) => element.updated),
+            );
+            settle(
+              snapshot.document
+                ? 2000
+                : Math.max(0, 2000 - (Date.now() - lastInk)),
+            );
           });
           signal.throwIfAborted();
         }
@@ -724,40 +734,58 @@ export const SelectionActions = ({
           setMessage("");
           return { action, quiz };
         }
-        const description = parseJSON(
-          await chat(
-            [
-              {
-                role: "system",
-                content:
-                  'Inspect the selected screenshot. Return only JSON {"prompt":"the complete exact written instruction in reading order, or an empty string if none","drawing":true or false}. Handwritten and printed words in the selection are the user’s image request. Retain every qualifier and operation. Inspect every area of the screenshot for visual content after reading the words. Drawing is true if any intentional non-text picture, diagram, photo, or simple shape outline exists, including small, rough, colored, partial or isolated sketches. Writing, lines that only underline a word, and blank space do not count as drawings. Do not imagine missing text or describe the drawing as if it were written.',
-              },
-              visualMessage(
-                JSON.stringify({ exactEditableText: knownText }),
-                image,
-              ),
-            ],
-            signal,
-            currentSettings(),
-            { maxTokens: 2048, timeoutMs: 20000, useVisionModel: true },
-          ),
-        ) as { prompt?: unknown; drawing?: unknown } | null;
-        signal.throwIfAborted();
+        let prompt = knownText;
+        let drawing = snapshot.source.some(
+          (element) => element.type !== "text",
+        );
         if (
-          typeof description?.prompt !== "string" ||
-          typeof description.drawing !== "boolean" ||
-          description.prompt.length > 5000 ||
-          (!description.prompt.trim() && !description.drawing)
+          snapshot.document ||
+          snapshot.source.some((element) => element.type === "freedraw")
         ) {
+          const description = parseJSON(
+            await chat(
+              [
+                {
+                  role: "system",
+                  content:
+                    'Read the whole selected screenshot. Return only JSON {"prompt":"all exact written instructions in reading order, or empty if none","drawing":true or false}. Preserve modifiers and relationships. Include supplied editable text once. Mark drawing true if the selection also contains a sketch, shape, photograph or diagram. Letter strokes and decorative underlines alone are writing. Never turn a drawing into written instructions or invent missing words.',
+                },
+                visualMessage(
+                  JSON.stringify({ exactEditableText: knownText }),
+                  image,
+                ),
+              ],
+              signal,
+              currentSettings(),
+              {
+                maxTokens: 2048,
+                timeoutMs: 20000,
+                useVisionModel: true,
+                quickVision: true,
+              },
+            ),
+          ) as { prompt?: unknown; drawing?: unknown } | null;
+          signal.throwIfAborted();
+          if (
+            typeof description?.prompt !== "string" ||
+            description.prompt.length > 10000 ||
+            typeof description.drawing !== "boolean"
+          ) {
+            throw new Error(
+              t("fcboard.no_content_recognized_select_the_area_again"),
+            );
+          }
+          prompt = description.prompt.trim() || knownText;
+          drawing = description.drawing;
+        }
+        if (!prompt.trim() && !drawing) {
           throw new Error(
             t("fcboard.no_content_recognized_select_the_area_again"),
           );
         }
-        const referenceImage = description.drawing ? image : undefined;
+        const referenceImage = drawing ? image : undefined;
         const generated = await generateImage(
-          [selectionImagePrompt("creative"), description.prompt.trim()]
-            .filter(Boolean)
-            .join("\n"),
+          [selectionImagePrompt("creative"), prompt].filter(Boolean).join("\n"),
           signal,
           { referenceImage, transparent: false },
         );
@@ -831,6 +859,7 @@ export const SelectionActions = ({
           {
             maxTokens: 1536,
             useVisionModel: wholeBoard,
+            quickVision: true,
             onReset: () => {
               preview = "";
               if (!signal.aborted) {
@@ -1059,6 +1088,7 @@ export const SelectionActions = ({
           },
           {
             maxTokens: 1536,
+            quickVision: true,
             onReset: () => {
               preview = "";
               if (!signal.aborted) {

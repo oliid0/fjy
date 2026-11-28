@@ -127,7 +127,6 @@ export const validateQuiz = (input: unknown, count?: number): Quiz => {
 const validateSources = (sources: Quiz["sources"]) => {
   if (
     !Array.isArray(sources) ||
-    !sources.length ||
     !sources.every((source) => {
       try {
         return (
@@ -181,69 +180,17 @@ export const generateQuiz = async (
     ...settings,
     model: settings.textModel || settings.model,
   };
-  type Plan = {
-    title: string;
-    tasks: { type: QuizQuestion["type"]; focus: string }[];
-    sources: Quiz["sources"];
+  // Independent questions start immediately; no research/planning round blocks them.
+  const plan = {
+    title: prompt.trim().split(/\s+/).join(" ").slice(0, 200).trimEnd(),
+    tasks: Array.from({ length: count }, (_, index) => ({
+      type: questionType,
+      focus: `Question ${
+        index + 1
+      } of ${count}; cover a distinct part of the complete request.`,
+    })),
+    sources: [] as Quiz["sources"],
   };
-  const planMessages: import("./ai").Message[] = [
-    {
-      role: "system",
-      content: `Research original quiz design using real web search. Verify the subject, grade and facts using textbooks, universities or educational institutions. Use interface language ${
-        getLanguage().code
-      }. Return ONLY JSON {"title":"title","tasks":[{"type":"single|multiple|true_false|fill|short|calculation|analysis|challenge","focus":"distinct self-contained question brief, facts and constraints"}],"sources":[{"title":"actual retrieved source","url":"full retrieved URL"}]}. Plan exactly ${count} distinct independent questions. Do not generate the questions yet. No copied exams or invented sources. ${
-        questionType
-          ? `Every question must use type "${questionType}".`
-          : "Choose suitable types according to the request."
-      }`,
-    },
-    visualMessage(JSON.stringify({ requirement: prompt, context }), image),
-  ];
-  let plan!: Plan;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await quizRequest(signal, () =>
-      chat(planMessages, signal, modelSettings, {
-        webSearch: true,
-        maxTokens: 6000,
-      }),
-    );
-    signal.throwIfAborted();
-    try {
-      const value = parseJSON(response) as Plan;
-      if (
-        !value ||
-        !nonempty(value.title, 200) ||
-        !Array.isArray(value.tasks) ||
-        value.tasks.length !== count ||
-        value.tasks.some(
-          (task) =>
-            !task ||
-            !quizTypes.includes(task.type) ||
-            !nonempty(task.focus, 3000) ||
-            (questionType && task.type !== questionType),
-        ) ||
-        new Set(value.tasks.map((task) => task.focus.trim())).size !== count
-      ) {
-        throw new Error(t("fcboard.aiMessages.quizInvalidStructure"));
-      }
-      validateSources(value.sources);
-      plan = value;
-      break;
-    } catch (failure) {
-      if (attempt) {
-        throw failure;
-      }
-      planMessages.push(
-        { role: "assistant", content: response },
-        {
-          role: "user",
-          content: `Invalid plan: ${
-            (failure as Error).message
-          }. Return a corrected plan of exactly ${count} tasks and actual retrieved sources.`,
-        },
-      );
-    }
-  }
   let value: Quiz = {
     id: crypto.randomUUID(),
     title: plan.title,
@@ -277,10 +224,12 @@ export const generateQuiz = async (
             content: `Generate ONE original independent quiz question from the assigned plan, in interface language ${
               getLanguage().code
             }. Return ONLY JSON {"type":"${
+              task.type || quizTypes.join("|")
+            }","question":"complete plain text with inline $...$ or block $$...$$ LaTeX","options":["option without letter prefix"],"answer":["answer"],"explanation":"specific verified explanation","steps":["worked step"],"needsImage":false,"imageMethod":"generate|draw when needsImage is true","imagePrompt":"required precise illustration specification when needsImage is true","imageCaption":"accurate caption"}. JSON LaTeX backslashes must be escaped. Single-choice has exactly one A-H answer, multiple-choice at least two; options 2..8. True-false answer is ["true"] or ["false"]. Fill uses ____ and ordered blank answers. Other types omit options. Independently calculate and check all answers, steps, units and assumptions. The question must be self-contained and distinct from other task briefs. ${
               task.type
-            }","question":"complete plain text with inline $...$ or block $$...$$ LaTeX","options":["option without letter prefix"],"answer":["answer"],"explanation":"specific verified explanation","steps":["worked step"],"needsImage":false,"imageMethod":"generate|draw when needsImage is true","imagePrompt":"required precise illustration specification when needsImage is true","imageCaption":"accurate caption"}. JSON LaTeX backslashes must be escaped. Single-choice has exactly one A-H answer, multiple-choice at least two; options 2..8. True-false answer is ["true"] or ["false"]. Fill uses ____ and ordered blank answers. Other types omit options. Independently calculate and check all answers, steps, units and assumptions. The question must be self-contained and distinct from other task briefs. Every question must use type "${
-              task.type
-            }". If the question refers to a picture, graph, objects, circuit or geometric/force diagram, needsImage MUST be true and imagePrompt must specify ALL required counts, topology, labels, values, units and directions, without the answer. Choose imageMethod freely: generate uses the image API; draw uses actual SVG/canvas programming with optional independent or combined Vega/Vega-Lite and JSXGraph engines. No subject is forced to an engine. Respect explicit drawing/engine choices and exclusions; use draw when an engine is required. A separate task creates and checks the actual image. Return only its specification here, not SVG/HTML/URLs. Never depend on an unspecified or missing figure.`,
+                ? `Every question must use type "${task.type}".`
+                : "Choose the question type to match the complete request."
+            } If the question refers to a picture, graph, objects, circuit or geometric/force diagram, needsImage MUST be true and imagePrompt must specify ALL required counts, topology, labels, values, units and directions, without the answer. Choose imageMethod freely: generate uses the image API; draw uses actual SVG/canvas programming with optional independent or combined Vega/Vega-Lite and JSXGraph engines. No subject is forced to an engine. Respect explicit drawing/engine choices and exclusions; use draw when an engine is required. A separate task creates the actual image. Use a concise explanation. Do not search or run an additional review. Return only its specification here, not SVG/HTML/URLs. Never depend on an unspecified or missing figure.`,
           },
           visualMessage(
             JSON.stringify({
@@ -295,121 +244,104 @@ export const generateQuiz = async (
             image,
           ),
         ];
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const response = await chat(messages, signal, modelSettings, {
-              maxTokens: 5000,
-            });
-            signal.throwIfAborted();
-            const candidate = parseJSON(response) as QuizQuestion & {
-              needsImage?: unknown;
-              imagePrompt?: unknown;
-              imageCaption?: unknown;
-              imageMethod?: unknown;
-            };
-            const question = validateQuiz(
-              {
-                title: plan.title,
-                sources: plan.sources,
-                questions: [candidate],
+        const response = await chat(messages, signal, modelSettings, {
+          maxTokens: 3000,
+          useVisionModel: true,
+          quickVision: true,
+        });
+        signal.throwIfAborted();
+        const candidate = parseJSON(response) as QuizQuestion & {
+          needsImage?: unknown;
+          imagePrompt?: unknown;
+          imageCaption?: unknown;
+          imageMethod?: unknown;
+        };
+        const question = validateQuiz(
+          {
+            title: plan.title,
+            sources: plan.sources,
+            questions: [candidate],
+          },
+          1,
+        ).questions[0];
+        if (task.type && question.type !== task.type) {
+          throw new Error(
+            t("fcboard.quizForm.typeMismatch", {
+              type: t(`fcboard.aiMessages.quizType_${task.type}`),
+            }),
+          );
+        }
+        if (
+          typeof candidate.needsImage !== "boolean" ||
+          (!candidate.needsImage &&
+            /如图|图中|图示|下图|shown in|in the (?:figure|diagram|picture)|following (?:figure|diagram|picture)/i.test(
+              question.question,
+            )) ||
+          (candidate.needsImage &&
+            (!nonempty(candidate.imagePrompt, 6000) ||
+              !nonempty(candidate.imageCaption, 500) ||
+              !["generate", "draw"].includes(String(candidate.imageMethod)) ||
+              ((engines.required.length || engines.anyOf?.length) &&
+                candidate.imageMethod !== "draw")))
+        ) {
+          throw new Error(t("fcboard.quizForm.imageSpecification"));
+        }
+        if (
+          value.questions.some(
+            (existing) => existing.question.trim() === question.question.trim(),
+          )
+        ) {
+          throw new Error(t("fcboard.aiMessages.quizIncomplete"));
+        }
+        const ready: QuizQuestion = {
+          type: question.type,
+          question: question.question,
+          options: question.options,
+          answer: question.answer,
+          explanation: question.explanation,
+          steps: question.steps,
+          id: crypto.randomUUID(),
+          ...(candidate.needsImage
+            ? {
+                image: {
+                  method: candidate.imageMethod as "generate" | "draw",
+                  engines,
+                  prompt: candidate.imagePrompt as string,
+                  caption: candidate.imageCaption as string,
+                  status: "pending" as const,
+                },
+              }
+            : {}),
+        };
+        value = { ...value, questions: [...value.questions, ready] };
+        publish();
+        if (ready.image) {
+          illustrations.push(
+            generateQuizImage(ready, signal).then(
+              (dataURL) => {
+                update({
+                  ...ready,
+                  image: { ...ready.image!, status: "ready", dataURL },
+                });
               },
-              1,
-            ).questions[0];
-            if (question.type !== task.type) {
-              throw new Error(
-                t("fcboard.quizForm.typeMismatch", {
-                  type: t(`fcboard.aiMessages.quizType_${task.type}`),
-                }),
-              );
-            }
-            if (
-              typeof candidate.needsImage !== "boolean" ||
-              (!candidate.needsImage &&
-                /如图|图中|图示|下图|shown in|in the (?:figure|diagram|picture)|following (?:figure|diagram|picture)/i.test(
-                  question.question,
-                )) ||
-              (candidate.needsImage &&
-                (!nonempty(candidate.imagePrompt, 6000) ||
-                  !nonempty(candidate.imageCaption, 500) ||
-                  !["generate", "draw"].includes(
-                    String(candidate.imageMethod),
-                  ) ||
-                  ((engines.required.length || engines.anyOf?.length) &&
-                    candidate.imageMethod !== "draw")))
-            ) {
-              throw new Error(t("fcboard.quizForm.imageSpecification"));
-            }
-            if (
-              value.questions.some(
-                (existing) =>
-                  existing.question.trim() === question.question.trim(),
-              )
-            ) {
-              throw new Error(t("fcboard.aiMessages.quizIncomplete"));
-            }
-            const ready: QuizQuestion = {
-              type: question.type,
-              question: question.question,
-              options: question.options,
-              answer: question.answer,
-              explanation: question.explanation,
-              steps: question.steps,
-              id: crypto.randomUUID(),
-              ...(candidate.needsImage
-                ? {
-                    image: {
-                      method: candidate.imageMethod as "generate" | "draw",
-                      engines,
-                      prompt: candidate.imagePrompt as string,
-                      caption: candidate.imageCaption as string,
-                      status: "pending" as const,
-                    },
-                  }
-                : {}),
-            };
-            value = { ...value, questions: [...value.questions, ready] };
-            publish();
-            if (ready.image) {
-              illustrations.push(
-                generateQuizImage(ready, signal).then(
-                  (dataURL) => {
-                    update({
-                      ...ready,
-                      image: { ...ready.image!, status: "ready", dataURL },
-                    });
+              (failure) => {
+                if (signal.aborted) {
+                  return;
+                }
+                update({
+                  ...ready,
+                  image: {
+                    ...ready.image!,
+                    status: "error",
+                    error:
+                      failure instanceof Error
+                        ? failure.message
+                        : String(failure),
                   },
-                  (failure) => {
-                    if (signal.aborted) {
-                      return;
-                    }
-                    update({
-                      ...ready,
-                      image: {
-                        ...ready.image!,
-                        status: "error",
-                        error:
-                          failure instanceof Error
-                            ? failure.message
-                            : String(failure),
-                      },
-                    });
-                  },
-                ),
-              );
-            }
-            return;
-          } catch (failure) {
-            signal.throwIfAborted();
-            if (attempt) {
-              throw failure;
-            }
-            messages.push({
-              role: "user",
-              content: `Previous attempt failed validation or transport: ${
-                failure instanceof Error ? failure.message : String(failure)
-              }. Generate a complete corrected question for the SAME assigned brief, not the whole quiz.`,
-            });
-          }
+                });
+              },
+            ),
+          );
         }
       }).catch((failure) => {
         signal.throwIfAborted();

@@ -69,6 +69,15 @@ export class BoardRecorder {
     return this.streams[0];
   }
 
+  cloneAudioStream() {
+    const tracks = this.audioStream
+      ?.getAudioTracks()
+      .filter((track) => track.readyState !== "ended");
+    return tracks?.length
+      ? new MediaStream(tracks.map((track) => track.clone()))
+      : undefined;
+  }
+
   async start(
     mode: RecordingMode,
     onStopped: () => void,
@@ -87,9 +96,16 @@ export class BoardRecorder {
     try {
       // Clone the active assistant microphone so stopping recording never stops
       // the long-lived dialogue. Camera capture only requests a video track.
-      const shared = microphone
+      const sharedTracks = microphone
+        ?.getAudioTracks()
+        .filter((track) => track.readyState !== "ended");
+      const shared = sharedTracks?.length
         ? new MediaStream(
-            microphone.getAudioTracks().map((track) => track.clone()),
+            sharedTracks.map((track) => {
+              const clone = track.clone();
+              clone.enabled = true;
+              return clone;
+            }),
           )
         : undefined;
       if (shared) {
@@ -119,6 +135,16 @@ export class BoardRecorder {
         captured.getVideoTracks().forEach((track) => shared.addTrack(track));
       }
       const media = shared || captured;
+      if (
+        media.getAudioTracks &&
+        !media.getAudioTracks().some((track) => track.readyState !== "ended")
+      ) {
+        throw new Error(
+          t(
+            "fcboard.the_microphone_did_not_provide_audio_check_permissions_and_the_input_device_then_start_again",
+          ),
+        );
+      }
       let output = media;
       if (mode === "screen" || mode === "combined") {
         const canvas = document.createElement("canvas");
@@ -323,7 +349,25 @@ export class BoardRecorder {
     if (this.recorder.state !== "inactive") {
       this.recorder.stop();
     }
-    return { blob: await this.stopPromise, duration };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const blob = await Promise.race([
+        this.stopPromise,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            this.release();
+            reject(
+              new Error(
+                t("fcboard.recording_failed_check_storage_and_permissions"),
+              ),
+            );
+          }, 8000);
+        }),
+      ]);
+      return { blob, duration };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   dispose() {

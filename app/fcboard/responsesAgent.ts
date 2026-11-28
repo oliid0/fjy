@@ -5,9 +5,12 @@ import { withAILanguagePolicy } from "./aiLocale";
 import { agentContext } from "./agent";
 import { postAI, postNativeAgentStep } from "./aiTransport";
 import { classroomCommands, executeBoardCommand } from "./commands";
-import { realtimeCommand, realtimeTools } from "./realtimeTools";
+import {
+  isBoardObservation,
+  realtimeCommand,
+  realtimeTools,
+} from "./realtimeTools";
 import { validateEndpoint } from "./settings";
-import { isLessonInspection } from "./lessonTools";
 
 import type { AIResponseLanguage } from "./aiLocale";
 
@@ -158,6 +161,8 @@ export const runResponsesAgent = async (options: {
   allowed: (name: string) => boolean;
   updates?: () => string[];
   requireActions?: boolean;
+  answerTool?: boolean;
+  requireMutation?: boolean;
   verifyToolFailures?: boolean;
   responseLanguage?: AIResponseLanguage;
   observeAfterTools?: () => Promise<Message>;
@@ -183,6 +188,20 @@ export const runResponsesAgent = async (options: {
   };
   const tools = () => {
     const available = realtimeTools(allowed);
+    if (options.answerTool && (!options.requireMutation || mutations)) {
+      available.push({
+        type: "function",
+        name: "voice_answer",
+        description:
+          "Answer a purely conversational or explanatory question, or report actual tool results. Never use this instead of a requested board operation. A success claim requires a successful action receipt. A running task or file picker is pending, never complete.",
+        parameters: {
+          type: "object",
+          properties: { text: { type: "string" } },
+          required: ["text"],
+          additionalProperties: false,
+        },
+      });
+    }
     if (classroomCommands.has("canvas.snapshot")) {
       available.push({
         type: "function",
@@ -233,8 +252,11 @@ export const runResponsesAgent = async (options: {
   let mutations = 0;
   const errors = new Map<string, unknown>();
   let idle = 0;
+  const inkViewport = () =>
+    canonical(classroomCommands.read("canvas.viewport"));
   for (let round = 0; round < 12; round++) {
     check();
+    let observedViewport = inkViewport();
     const request = new AbortController();
     const cancel = () => request.abort(signal.reason);
     signal.addEventListener("abort", cancel, { once: true });
@@ -252,7 +274,9 @@ export const runResponsesAgent = async (options: {
     let response: Response;
     let caption = "";
     const preview =
-      options.onTextPreview && !errors.size
+      options.onTextPreview &&
+      !errors.size &&
+      (!options.answerTool || mutations)
         ? (delta?: string) => {
             if (delta) {
               if (!request.signal.aborted && current()) {
@@ -271,6 +295,9 @@ export const runResponsesAgent = async (options: {
         model: settings.model,
         input,
         tools: tools(),
+        ...(options.answerTool && !mutations
+          ? { tool_choice: "required" }
+          : {}),
         stream: true,
         store: true,
         max_output_tokens: 4096,
@@ -360,7 +387,8 @@ export const runResponsesAgent = async (options: {
         .map((part) => part.text)
         .join("\n");
       if (
-        (mutations || options.requireActions === false) &&
+        (mutations ||
+          (!options.answerTool && options.requireActions === false)) &&
         !errors.size &&
         text.trim()
       ) {
@@ -372,7 +400,8 @@ export const runResponsesAgent = async (options: {
           throw errors.values().next().value;
         }
         throw new Error(
-          text.trim() || t("fcboard.invalid_ai_follow_up_action"),
+          (!options.answerTool && text.trim()) ||
+            t("fcboard.invalid_ai_follow_up_action"),
         );
       }
       previous = response.id;
@@ -430,10 +459,35 @@ export const runResponsesAgent = async (options: {
         input.push(output);
         continue;
       }
+      if (
+        item.name === "voice_answer" &&
+        options.answerTool &&
+        options.verifyToolFailures &&
+        errors.size
+      ) {
+        throw errors.values().next().value;
+      }
       let result: unknown;
       let image: string | undefined;
       let errorKey = item.name;
       try {
+        if (item.name === "voice_answer" && options.answerTool) {
+          const answer = JSON.parse(item.arguments);
+          errors.delete(item.name);
+          if (
+            functions.length !== 1 ||
+            (options.requireMutation && !mutations) ||
+            errors.size ||
+            typeof answer?.text !== "string" ||
+            !answer.text.trim()
+          ) {
+            throw new Error(t("fcboard.invalid_ai_follow_up_action"));
+          }
+          return {
+            summary: answer.text,
+            canvas: classroomCommands.read("canvas"),
+          };
+        }
         if (
           item.name === "observe_visible_board" &&
           classroomCommands.has("canvas.snapshot")
@@ -445,12 +499,11 @@ export const runResponsesAgent = async (options: {
           const { image: captured, ...observation } = snapshot;
           result = observation;
           image = captured;
+          observedViewport = inkViewport();
           errors.delete(item.name);
         } else {
           const command = realtimeCommand(item);
-          const read =
-            isLessonInspection(command) ||
-            /\.(?:inspect|list|pages)$/.test(command.name);
+          const read = isBoardObservation(command);
           errorKey = `${command.name}:${read ? "read" : "write"}`;
           if (!allowed(command.name)) {
             throw new Error(
@@ -459,7 +512,18 @@ export const runResponsesAgent = async (options: {
               }),
             );
           }
-          const key = canonical([command.name, command.args || {}, surface()]);
+          const normalizedInk =
+            ["canvas.ink", "canvas.erase"].includes(command.name) &&
+            command.args?.coordinateSpace === "viewport";
+          if (normalizedInk && inkViewport() !== observedViewport) {
+            throw new Error(t("fcboard.invalid_annotation_coordinates"));
+          }
+          const key = canonical([
+            command.name,
+            command.args || {},
+            surface(),
+            normalizedInk ? observedViewport : undefined,
+          ]);
           const observedIds = new Set(
             (
               (
@@ -487,6 +551,9 @@ export const runResponsesAgent = async (options: {
               command,
               signal,
             );
+            if (command.name === "canvas.inspect") {
+              observedViewport = inkViewport();
+            }
             if (
               (result as { cancelled?: boolean } | undefined)?.cancelled ===
               true
@@ -495,6 +562,7 @@ export const runResponsesAgent = async (options: {
             }
             if (!read) {
               mutations++;
+              errors.delete("voice_answer");
               if (insertion) {
                 const ids = (result as { ids?: unknown } | undefined)?.ids;
                 committed.set(key, {
@@ -562,6 +630,9 @@ export const runResponsesAgent = async (options: {
           .join("\n")}`,
       });
     }
+  }
+  if (options.verifyToolFailures && errors.size) {
+    throw errors.values().next().value;
   }
   throw new Error(
     t(

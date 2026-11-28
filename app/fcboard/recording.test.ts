@@ -7,6 +7,7 @@ import {
 
 describe("recording lifecycle", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -187,4 +188,91 @@ describe("recording lifecycle", () => {
       expect(ended).toHaveBeenCalledTimes(1);
     },
   );
+  it("requests a fresh microphone instead of cloning an ended assistant track", async () => {
+    const clone = vi.fn();
+    const freshStop = vi.fn();
+    const freshTrack = { readyState: "live", stop: freshStop };
+    const fresh = {
+      getTracks: () => [freshTrack],
+      getAudioTracks: () => [freshTrack],
+    };
+    const getUserMedia = vi.fn().mockResolvedValue(fresh);
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        static isTypeSupported() {
+          return true;
+        }
+        mimeType = "audio/webm";
+        state = "inactive";
+        ondataavailable?: (event: { data: Blob }) => void;
+        onstop?: () => void;
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+          this.ondataavailable?.({ data: new Blob(["fresh audio"]) });
+          this.onstop?.();
+        }
+      },
+    );
+    const recorder = new BoardRecorder();
+    await recorder.start("audio", vi.fn(), {
+      getAudioTracks: () => [{ readyState: "ended", clone }],
+    } as unknown as MediaStream);
+    expect(clone).not.toHaveBeenCalled();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect((await recorder.stop()).blob.size).toBe(11);
+    expect(freshStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a captured stream without an audio track instead of reporting recording success", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi
+          .fn()
+          .mockResolvedValue({ getTracks: () => [], getAudioTracks: () => [] }),
+      },
+    });
+    vi.stubGlobal("MediaRecorder", class {});
+    const recorder = new BoardRecorder();
+    await expect(recorder.start("audio", vi.fn())).rejects.toThrow();
+    recorder.dispose();
+  });
+
+  it("releases the microphone and reports failure if the recorder never completes saving", async () => {
+    vi.useFakeTimers();
+    const stop = vi.fn();
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi
+          .fn()
+          .mockResolvedValue({ getTracks: () => [{ stop }] }),
+      },
+    });
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        static isTypeSupported() {
+          return true;
+        }
+        mimeType = "audio/webm";
+        state = "inactive";
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+        }
+      },
+    );
+    const recorder = new BoardRecorder();
+    await recorder.start("audio", vi.fn());
+    const stopped = expect(recorder.stop()).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(8000);
+    await stopped;
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
 });

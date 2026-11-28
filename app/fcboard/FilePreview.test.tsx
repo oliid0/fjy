@@ -1572,6 +1572,47 @@ it("reports object ids and actual movement before erasing only those annotations
   expect(update).not.toHaveBeenCalled();
 });
 
+it("commits flat agent ink and erases only the requested part of the visible annotation page", async () => {
+  const { api, update } = await setup();
+  const stop = registerCanvasCommands(api);
+  const points = [
+    [400, 300],
+    [430, 280],
+    [460, 300],
+  ];
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.ink",
+        args: { strokes: points, coordinateSpace: "scene", select: false },
+      });
+    });
+    expect(currentInk()).toEqual([expect.objectContaining({ points })]);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.erase",
+        args: {
+          region: [
+            [415, 270],
+            [445, 270],
+            [445, 295],
+            [415, 295],
+          ],
+          coordinateSpace: "scene",
+        },
+      });
+    });
+    expect(currentInk()).toHaveLength(2);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(currentInk()).toEqual([expect.objectContaining({ points })]);
+    expect(update).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
+});
+
 it("resizes existing handwriting and CJK text together on visible courseware, then aligns them without touching the hidden board", async () => {
   const { draw, api, update } = await setup();
   draw();

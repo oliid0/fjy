@@ -7,8 +7,89 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { registerCanvasCommands } from "./canvasCommands";
 import { classroomCommands } from "./commands";
+import { realtimeCommand } from "./realtimeTools";
 import { updateQuestionAnswer } from "./questionAnswer";
 import { handwritingText } from "./handwriting";
+
+it("commits agent paths with real geometry and undoes a regional erasure as one editor action", async () => {
+  let api!: FcboardImperativeAPI;
+  const view = await render(
+    <Fcboard
+      handleKeyboardGlobally
+      UIOptions={{ unifiedToolbar: true }}
+      onMount={({ excalidrawAPI }) => {
+        api = excalidrawAPI;
+      }}
+    />,
+  );
+  const release = registerCanvasCommands(api);
+  const tool = (name: string, args: object) =>
+    classroomCommands.execute(
+      realtimeCommand({ name, arguments: JSON.stringify(args) }),
+    );
+  try {
+    await act(async () => {
+      await tool("board_draw", {
+        strokes: [[300, 270]],
+        coordinateSpace: "scene",
+      });
+    });
+    const dot = api.getSceneElements()[0];
+    expect(dot).toMatchObject({
+      type: "freedraw",
+      points: [
+        [0, 0],
+        [0.0001, 0.0001],
+      ],
+    });
+    await act(async () => {
+      await tool("board_erase", { ids: [dot.id] });
+    });
+    await act(async () => {
+      await tool("board_draw", {
+        strokes: [
+          [400, 300],
+          [430, 280],
+          [460, 300],
+        ],
+        coordinateSpace: "scene",
+      });
+    });
+    const line = api.getSceneElements()[0];
+    expect(line).toMatchObject({ x: 400, y: 300, width: 60, height: 20 });
+    expect(api.getSceneElementsIncludingDeleted()).toContainEqual(
+      expect.objectContaining({ id: dot.id, isDeleted: true }),
+    );
+    await act(async () => {
+      await tool("board_erase", {
+        region: [
+          [415, 270],
+          [445, 270],
+          [445, 295],
+          [415, 295],
+        ],
+        coordinateSpace: "scene",
+      });
+    });
+    expect(api.getSceneElements()).toHaveLength(2);
+    Keyboard.undo();
+    expect(api.getSceneElements()).toEqual([
+      expect.objectContaining({
+        id: line.id,
+        points: [
+          [0, 0],
+          [30, -20],
+          [60, 0],
+        ],
+      }),
+    ]);
+    Keyboard.redo();
+    expect(api.getSceneElements()).toHaveLength(2);
+  } finally {
+    release();
+    view.unmount();
+  }
+});
 
 it("undoes mixed raw and dictated question writing as one real editor transaction", async () => {
   let api!: FcboardImperativeAPI;

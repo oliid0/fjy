@@ -112,7 +112,7 @@ it("starts and commits immediately after an explicit ending, without an addition
 it("retains fraction bars, single minus signs, and incomplete equals signs", () => {
   for (const ink of [fraction, equals.slice(0, -1), equals.slice(0, 2)]) {
     expect(calculationInk(ink)).toEqual({ complete: false, strokes: ink });
-    expect(inkRecognitionDelay("calculation", ink)).toBe(1200);
+    expect(inkRecognitionDelay("calculation", ink)).toBe(350);
   }
 });
 

@@ -44,6 +44,27 @@ it.each(["function", "calculation"])(
   },
 );
 it.each(["function", "calculation"])(
+  "retries an unfinished %s expression when a nearby symbol arrives after recognition",
+  (mode) => {
+    const requests = new InkRequests();
+    const a = { id: "a", points: ink(100)[0] };
+    const b = { id: "b", points: ink(209)[0] };
+    const first = new AbortController();
+    requests.reserve(first, [a.id], [a.points], mode);
+    requests.start(first);
+    requests.finish(first, true);
+    expect(
+      requests.source(
+        [a, b],
+        mode,
+        (item) => item.id,
+        (items) => items.map((item) => item.points),
+      ),
+    ).toEqual([a, b]);
+    expect(first.signal.aborted).toBe(true);
+  },
+);
+it.each(["function", "calculation"])(
   "still combines unfinished %s glyphs before recognition starts",
   (mode) => {
     const requests = new InkRequests();

@@ -7,6 +7,7 @@ export const latestFunctionInk = (
     rowGap = 0.35,
     minimumGap = 8,
     horizontalGapScale = 6,
+    minimumHorizontalGap = 60,
     useGroupHeight = false,
   } = {},
 ) => {
@@ -47,7 +48,10 @@ export const latestFunctionInk = (
           box.bottom - box.top,
         ) * rowGap,
       );
-      const horizontalGap = Math.max(60, gap * horizontalGapScale);
+      const horizontalGap = Math.max(
+        minimumHorizontalGap,
+        gap * horizontalGapScale,
+      );
       if (
         box.top <= bottom + gap &&
         box.bottom >= top - gap &&

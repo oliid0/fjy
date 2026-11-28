@@ -208,7 +208,7 @@ it("lets the voice agent generate a real quiz, inspect its answers, and reopen t
   const { chat, view } = setup();
   saveSettings({ ...defaults, apiKey: "test" }, false);
   const quiz = {
-    title: "真实测验",
+    title: "出1道数学单选题",
     questions: [
       {
         type: "single",
@@ -218,19 +218,10 @@ it("lets the voice agent generate a real quiz, inspect its answers, and reopen t
         explanation: "两个1合为2",
       },
     ],
-    sources: [{ title: "教材", url: "https://www.moe.gov.cn/" }],
   };
-  chat
-    .mockResolvedValueOnce(
-      JSON.stringify({
-        title: quiz.title,
-        sources: quiz.sources,
-        tasks: [{ type: "single", focus: "一加一" }],
-      }),
-    )
-    .mockResolvedValueOnce(
-      JSON.stringify({ ...quiz.questions[0], needsImage: false }),
-    );
+  chat.mockResolvedValueOnce(
+    JSON.stringify({ ...quiz.questions[0], needsImage: false }),
+  );
   try {
     await expect(
       classroomCommands.execute({ name: "quiz.open" }),
@@ -243,7 +234,8 @@ it("lets the voice agent generate a real quiz, inspect its answers, and reopen t
       });
     });
     expect(result).toEqual({ title: quiz.title, count: 1 });
-    expect(chat.mock.calls[0][3]).toMatchObject({ webSearch: true });
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(chat.mock.calls[0][3]).toMatchObject({ quickVision: true });
     expect(
       await classroomCommands.execute({
         name: "quiz.inspect",
@@ -292,7 +284,7 @@ it("cancels pending quiz generation on manual navigation and never publishes the
     finish("检索已取消");
     await pending;
   });
-  expect(view.queryByTitle("真实测验")).toBeNull();
+  expect(view.queryByTitle("出1道题")).toBeNull();
   await expect(
     classroomCommands.execute({ name: "quiz.open" }),
   ).rejects.toThrow();
@@ -301,18 +293,14 @@ it("cancels pending quiz generation on manual navigation and never publishes the
 
 it("keeps quiz jobs independent and returns each job's own result when they finish out of order", async () => {
   const { chat, view } = setup();
-  const makeQuiz = (title: string) => ({
-    title,
-    questions: [
-      {
-        type: "short",
-        question: `${title}的问题`,
-        answer: ["答案"],
-        explanation: "说明",
-      },
-    ],
-    sources: [{ title: "教材", url: "https://www.moe.gov.cn/" }],
-  });
+  const question = (topic: string) =>
+    JSON.stringify({
+      type: "short",
+      question: `${topic}的问题`,
+      answer: ["答案"],
+      explanation: "说明",
+      needsImage: false,
+    });
   let finishFirst!: (value: string) => void;
   let finishSecond!: (value: string) => void;
   chat
@@ -327,18 +315,6 @@ it("keeps quiz jobs independent and returns each job's own result when they fini
         new Promise((resolve) => {
           finishSecond = resolve;
         }),
-    )
-    .mockResolvedValueOnce(
-      JSON.stringify({
-        ...makeQuiz("数学测验").questions[0],
-        needsImage: false,
-      }),
-    )
-    .mockResolvedValueOnce(
-      JSON.stringify({
-        ...makeQuiz("力学测验").questions[0],
-        needsImage: false,
-      }),
     );
   const release = classroomCommands.register(
     "canvas.snapshot",
@@ -367,31 +343,19 @@ it("keeps quiz jobs independent and returns each job's own result when they fini
       "data:image/png;base64,visible-equation",
     );
     await act(async () => {
-      finishSecond(
-        JSON.stringify({
-          title: "数学测验",
-          sources: makeQuiz("数学测验").sources,
-          tasks: [{ type: "short", focus: "数学知识" }],
-        }),
-      );
-      await expect(second).resolves.toEqual({ title: "数学测验", count: 1 });
+      finishSecond(question("数学"));
+      await expect(second).resolves.toEqual({ title: "出1道数学题", count: 1 });
     });
     expect(chat.mock.calls[0][1]?.aborted).toBe(false);
     await act(async () => {
-      finishFirst(
-        JSON.stringify({
-          title: "力学测验",
-          sources: makeQuiz("力学测验").sources,
-          tasks: [{ type: "short", focus: "力学知识" }],
-        }),
-      );
-      await expect(first).resolves.toEqual({ title: "力学测验", count: 1 });
+      finishFirst(question("力学"));
+      await expect(first).resolves.toEqual({ title: "出1道力学题", count: 1 });
     });
     expect(
       await classroomCommands.execute({ name: "quiz.inspect" }),
-    ).toMatchObject({ title: "数学测验", count: 1 });
-    expect(view.getByTitle("数学测验")).toBeVisible();
-    expect(view.queryByTitle("力学测验")).toBeNull();
+    ).toMatchObject({ title: "出1道数学题", count: 1 });
+    expect(view.getByTitle("出1道数学题")).toBeVisible();
+    expect(view.queryByTitle("出1道力学题")).toBeNull();
   } finally {
     view.unmount();
     release();

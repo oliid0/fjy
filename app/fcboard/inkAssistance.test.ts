@@ -157,8 +157,8 @@ const setup = (
       }
       refresh();
     },
-    append: () => {
-      const next = { ...ink, id: "second-stroke", x: 240 };
+    append: (x = 240) => {
+      const next = { ...ink, id: "second-stroke", x };
       scene = [...scene, next];
       commit(next);
       refresh();
@@ -347,7 +347,7 @@ it("uses the mode saved on the contact's ink rather than the other pen's selecte
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1199);
+      await vi.advanceTimersByTimeAsync(349);
     });
     expect(recognize).not.toHaveBeenCalled();
     await act(async () => {
@@ -361,6 +361,7 @@ it("uses the mode saved on the contact's ink rather than the other pen's selecte
     expect(api.getSceneElements()).toEqual([ink]);
     await act(async () => {
       finish("1+1=");
+      await vi.advanceTimersByTimeAsync(350);
     });
     expect(
       handwritingText(
@@ -399,7 +400,7 @@ it("never starts automatic conversion on the hidden board while courseware is vi
   }
 });
 
-it("waits for the complete formula after another stroke instead of recognizing partial ink", async () => {
+it("starts recognition early and replaces a partial result when the next symbol joins it", async () => {
   vi.useFakeTimers();
   const { api, draw, append } = setup("calculation");
   const recognize = vi
@@ -411,18 +412,19 @@ it("waits for the complete formula after another stroke instead of recognizing p
     await act(async () => {
       await vi.advanceTimersByTimeAsync(600);
     });
-    expect(recognize).not.toHaveBeenCalled();
-    append();
+    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(api.updateScene).not.toHaveBeenCalled();
+    append(209);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1199);
+      await vi.advanceTimersByTimeAsync(699);
     });
-    expect(recognize).not.toHaveBeenCalled();
+    expect(recognize.mock.calls[0][1].aborted).toBe(true);
+    expect(recognize).toHaveBeenCalledTimes(2);
+    expect(recognize.mock.calls[1][5]).toHaveLength(2);
     expect(api.updateScene).not.toHaveBeenCalled();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
     });
-    expect(recognize).toHaveBeenCalledTimes(1);
-    expect(recognize.mock.calls[0][5]).toHaveLength(2);
     expect(api.updateScene).toHaveBeenCalledTimes(1);
     expect(handwritingText(api.getSceneElements())).toEqual(["2"]);
   } finally {
@@ -486,6 +488,9 @@ it.each([
         "math",
         expect.any(Function),
         expect.any(Array),
+        undefined,
+        undefined,
+        true,
       );
       expect(vi.mocked(ocr.recognizeHandwriting).mock.calls[1][5]).toHaveLength(
         1,

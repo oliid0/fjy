@@ -1,9 +1,10 @@
 import { latestFunctionInk } from "./functionInk";
+import { calculationInk } from "./calculationInk";
 import { latestShapeInk } from "./shapeRecognition";
 
 import type { InkInput } from "./digitalInk";
 
-const region = (ink: InkInput, mode: string) => {
+const region = (ink: InkInput, mode: string, continuing = false) => {
   if (mode === "shape") {
     return latestShapeInk(ink);
   }
@@ -37,7 +38,25 @@ const region = (ink: InkInput, mode: string) => {
   return latestFunctionInk(ink, {
     rowGap: mode === "calculation" ? 1.1 : 0.35,
     useGroupHeight: mode !== "function",
+    ...(continuing && {
+      minimumHorizontalGap: 14,
+      horizontalGapScale: mode === "calculation" ? 0.25 : 1,
+    }),
   });
+};
+
+const joins = (
+  entry: { ink: InkInput; mode: string; started: boolean },
+  incoming: InkInput,
+) => {
+  const { ink, mode, started } = entry;
+  if (mode === "calculation" && calculationInk(ink).complete) {
+    return false;
+  }
+  // After inference starts, only close neighbors can extend unfinished math.
+  const continuing = started && (mode === "function" || mode === "calculation");
+  const included = region([...ink, ...incoming], mode, continuing);
+  return Array.from(included).some((index) => index < ink.length);
 };
 
 /** Independent ink regions keep separate requests; adding to the same region revises only it. */
@@ -76,20 +95,7 @@ export class InkRequests {
       if (entry.mode !== mode) {
         continue;
       }
-      // Recognition closes a math expression. Later pen lifts belong to a
-      // new request, even beside a running or failed expression. Actual edits
-      // to its source are still invalidated by prune/current.
-      if (
-        (mode === "function" || mode === "calculation") &&
-        (entry.started || entry.failed)
-      ) {
-        continue;
-      }
-      const group = region([...entry.ink, ...ink(fresh)], mode);
-      if (
-        Array.from(group).some((index) => index < entry.ink.length) &&
-        Array.from(group).some((index) => index >= entry.ink.length)
-      ) {
+      if (joins(entry, ink(fresh))) {
         this.cancel(request);
         entry.ids.forEach((value) => selected.add(value));
       }
@@ -132,17 +138,7 @@ export class InkRequests {
       if (entry.mode !== mode) {
         continue;
       }
-      if (
-        (mode === "function" || mode === "calculation") &&
-        (entry.started || entry.failed)
-      ) {
-        continue;
-      }
-      const included = region([...entry.ink, ...ink], mode);
-      if (
-        Array.from(included).some((index) => index < entry.ink.length) &&
-        Array.from(included).some((index) => index >= entry.ink.length)
-      ) {
+      if (ink.length && joins(entry, ink)) {
         this.cancel(request);
       }
     }

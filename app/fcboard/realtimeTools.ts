@@ -1,6 +1,13 @@
 import { classroomCommands } from "./commands";
+import { isLessonInspection } from "./lessonTools";
 
 import type { Command } from "./commands";
+
+export const isBoardObservation = (command: Command) =>
+  isLessonInspection(command) ||
+  /\.(?:inspect|list|pages|snapshot|describe)$/.test(command.name) ||
+  ["agent.tools", "document.ask"].includes(command.name) ||
+  command.args?.action === "read";
 
 const point = {
   type: "array",
@@ -103,14 +110,25 @@ const bindings = [
     name: "board_draw",
     command: "canvas.ink",
     description:
-      "Draw actual editable pen strokes for a sketch, circuit or teaching diagram. Each stroke is an ordered polyline of [x,y] points in the inspected visible canvas coordinates. Use separate strokes for distinct lines, connect shared endpoints precisely, and use board_write for requested readable labels. Use pen/color/width/opacity for brush effects. Use board_shape for a precise geometric object such as a triangle.",
+      "Draw editable pen paths. Read board_inspect for bounds and coordinates. Explicit board coordinates use coordinateSpace=scene or omit it. Only select viewport for normalized positions with 0 at the left/top and 1000 at the right/bottom. One path can be strokes=[[400,300],[430,280],[460,300]]. Multiple paths use strokes=[[[400,300],[430,280]],[[450,290],[460,300]]]. Repeat the first point to close an outline. Use board_write for labels.",
     properties: {
       strokes: {
-        type: "array",
-        items: { type: "array", items: point, minItems: 1 },
-        minItems: 1,
+        anyOf: [
+          { type: "array", items: point, minItems: 1 },
+          {
+            type: "array",
+            items: { type: "array", items: point, minItems: 1 },
+            minItems: 1,
+          },
+        ],
       },
       select: { type: "boolean" },
+      coordinateSpace: { type: "string", enum: ["scene", "viewport"] },
+      revision: {
+        type: "integer",
+        description:
+          "Optional revision read from board_inspect. Omit if none was read.",
+      },
       pen: {
         type: "string",
         enum: ["hard", "brush", "highlighter", "dashed", "rainbow"],
@@ -120,6 +138,19 @@ const bindings = [
       opacity: { type: "number", minimum: 0, maximum: 100 },
     },
     required: ["strokes"],
+  },
+  {
+    name: "board_erase",
+    command: "canvas.erase",
+    description:
+      "Erase objects by their observed ids, the selection without arguments, or a polygon region such as [[400,280],[460,280],[460,320],[400,320]]. Inspect the board first. Explicit board coordinates use coordinateSpace=scene or omit it. Only use viewport for normalized 0–1000 coordinates. Keeps ink outside the polygon.",
+    properties: {
+      ids,
+      region: { type: "array", minItems: 3, maxItems: 512, items: point },
+      coordinateSpace: { type: "string", enum: ["scene", "viewport"] },
+      revision: { type: "integer" },
+    },
+    required: [],
   },
   {
     name: "board_shape",

@@ -265,7 +265,7 @@ export const Classroom = ({
   const voiceConversation = useRef<Message[]>([]);
   const stopSpeech = useRef<(() => void) | null>(null);
   const localSpeech = useRef<LocalSpeechHandle | null>(null);
-  const duplexRecordingSpeech = useRef<LocalSpeechHandle | null>(null);
+  const cloudRecordingSpeech = useRef<LocalSpeechHandle | null>(null);
   const recordingSpeakers = useRef(new Map<string, string>());
   const recordUsesCloud = useRef(false);
   const duplexSpeech = useRef<DuplexSpeechHandle | null>(null);
@@ -707,7 +707,8 @@ export const Classroom = ({
       narrator.current?.stop();
       stopSpeech.current?.();
       void localSpeech.current?.cancel().catch(() => {});
-      void duplexRecordingSpeech.current?.cancel().catch(() => {});
+      recordSpeechGeneration.current = recordSpeechGeneration.current + 1;
+      void cloudRecordingSpeech.current?.cancel().catch(() => {});
       recorder.current?.dispose();
       if (voiceRecorder.current?.state === "recording") {
         voiceRecorder.current.stop();
@@ -1480,7 +1481,12 @@ Tools and controls depend on the current interface; open the relevant surface be
             context.image,
           ),
         ];
-        const response = parseJSON(await chat(messages, selection?.signal));
+        const response = parseJSON(
+          await chat(messages, selection?.signal, currentSettings(), {
+            useVisionModel: true,
+            quickVision: true,
+          }),
+        );
         if (
           selection?.signal.aborted ||
           !classroomCommands.isCurrent(revision, request.signal) ||
@@ -1630,7 +1636,8 @@ Tools and controls depend on the current interface; open the relevant surface be
   };
   voiceExecute.current = async (text, signal, taskSignal) => {
     setVoiceCaption(text);
-    const direct = directCommand(text);
+    const cloud = currentSettings().speech === "cloud";
+    const direct = cloud ? null : directCommand(text);
     if (direct) {
       const routed =
         direct.name === "record.start" ? direct : voiceBoardCommand(direct);
@@ -1643,7 +1650,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       }
       return;
     }
-    if (localMathIntent(text)) {
+    if (!cloud && localMathIntent(text)) {
       await execute(text, false, { signal });
       return;
     }
@@ -1845,7 +1852,7 @@ Tools and controls depend on the current interface; open the relevant surface be
           const failed = duplexSpeech.current;
           duplexSpeech.current = null;
           localSpeech.current = null;
-          if (recorder.current && failed) {
+          if (recorder.current && failed && !recordUsesCloud.current) {
             recordSpeechGeneration.current++;
             recordSpeechRelease.current = failed.cancel();
             void recordSpeechRelease.current
@@ -1891,11 +1898,18 @@ Tools and controls depend on the current interface; open the relevant surface be
       localSpeech.current = null;
       duplexTranscript.current = null;
       recordingVoiceCommand.current = false;
+      if (recorder.current && recordUsesCloud.current) {
+        invalidateVoice();
+      }
       setListening(false);
       voiceRelease.current = (async () => {
         await session?.cancel();
         await opening;
-        if (recorder.current && !stoppingRecording.current) {
+        if (
+          recorder.current &&
+          !stoppingRecording.current &&
+          !recordUsesCloud.current
+        ) {
           await (recordSpeechTask.current = startRecordingSpeech(
             recorder.current,
           ));
@@ -1907,7 +1921,8 @@ Tools and controls depend on the current interface; open the relevant surface be
     if (
       currentSettings().assistantVoice === "duplex" &&
       !duplexSpeech.current &&
-      !voiceTurns.current
+      !voiceTurns.current &&
+      !(recorder.current && recordUsesCloud.current)
     ) {
       if (duplexOpening.current) {
         await duplexOpening.current;
@@ -1920,7 +1935,7 @@ Tools and controls depend on the current interface; open the relevant surface be
           return;
         }
         narrator.current?.stop();
-        if (recorder.current) {
+        if (recorder.current && !recordUsesCloud.current) {
           recordSpeechGeneration.current++;
           await recordSpeechTask.current;
           if (generation !== voiceGeneration.current) {
@@ -1940,7 +1955,8 @@ Tools and controls depend on the current interface; open the relevant surface be
         if (
           generation === voiceGeneration.current &&
           recorder.current &&
-          duplexSpeech.current
+          duplexSpeech.current &&
+          !recordUsesCloud.current
         ) {
           await (recordSpeechTask.current = startRecordingSpeech(
             recorder.current,
@@ -1984,6 +2000,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       if (
         !recordingVoiceCommand.current &&
         !localSpeech.current &&
+        !cloudRecordingSpeech.current &&
         !stopSpeech.current
       ) {
         if (recordPausedAt.current === undefined) {
@@ -2006,7 +2023,11 @@ Tools and controls depend on the current interface; open the relevant surface be
         await (recordSpeechTask.current = startRecordingSpeech(
           recorder.current!,
         ));
-        if (!localSpeech.current && !stopSpeech.current) {
+        if (
+          !localSpeech.current &&
+          !cloudRecordingSpeech.current &&
+          !stopSpeech.current
+        ) {
           recordingVoiceCommand.current = false;
           recordSpeechPausedForCommands.current = false;
           invalidateVoice();
@@ -2252,8 +2273,8 @@ Tools and controls depend on the current interface; open the relevant surface be
 
   const startRecordingSpeech = async (instance: BoardRecorder) => {
     const speechGeneration = ++recordSpeechGeneration.current;
-    const sharedAsr = duplexRecordingSpeech.current;
-    duplexRecordingSpeech.current = null;
+    const sharedAsr = cloudRecordingSpeech.current;
+    cloudRecordingSpeech.current = null;
     await Promise.all([
       recordSpeechRelease.current,
       sharedAsr?.stop().catch(() => {}),
@@ -2323,10 +2344,15 @@ Tools and controls depend on the current interface; open the relevant surface be
       }
       recordSpeechGeneration.current++;
       setInterimTranscript(null);
-      if (duplex && cloudRecording) {
-        const handle = duplexRecordingSpeech.current;
-        duplexRecordingSpeech.current = null;
+      if (cloudRecording) {
+        const handle = cloudRecordingSpeech.current;
+        cloudRecordingSpeech.current = null;
         recordSpeechRelease.current = handle?.cancel().catch(() => {});
+        if (!duplexSpeech.current && recordingVoiceCommand.current) {
+          recordingVoiceCommand.current = false;
+          invalidateVoice();
+          setListening(false);
+        }
         setError(
           t(
             "fcboard.recording_continues_live_transcription_is_unavailable_error",
@@ -2375,7 +2401,16 @@ Tools and controls depend on the current interface; open the relevant surface be
       return;
     }
     if (cloudRecording || currentSettings().speech === "local") {
+      let tap: MediaStream | undefined;
+      const releaseTap = () =>
+        tap?.getTracks().forEach((track) => track.stop());
       try {
+        if (cloudRecording) {
+          tap = instance.cloneAudioStream();
+          if (!tap) {
+            throw new Error(t("fcboard.no_active_recording"));
+          }
+        }
         const handle = await startRealtimeSpeech(
           (line) => {
             if (speechGeneration !== recordSpeechGeneration.current) {
@@ -2394,7 +2429,7 @@ Tools and controls depend on the current interface; open the relevant surface be
             }
           },
           failed,
-          instance.audioStream,
+          tap || instance.audioStream,
           () => {
             if (
               speechGeneration === recordSpeechGeneration.current &&
@@ -2411,6 +2446,12 @@ Tools and controls depend on the current interface; open the relevant surface be
           cloudRecording ? (message) => setError(message) : undefined,
           cloudRecording,
         );
+        const ownedHandle = tap
+          ? {
+              stop: () => handle.stop().finally(releaseTap),
+              cancel: () => handle.cancel().finally(releaseTap),
+            }
+          : handle;
         if (
           recorder.current !== instance ||
           (stoppingRecording.current && !cloudRecording) ||
@@ -2418,15 +2459,16 @@ Tools and controls depend on the current interface; open the relevant surface be
             !recordSpeechPausedForCommands.current) ||
           speechGeneration !== recordSpeechGeneration.current
         ) {
-          await handle.cancel();
+          await ownedHandle.cancel();
           return;
         }
-        if (duplex && cloudRecording) {
-          duplexRecordingSpeech.current = handle;
+        if (cloudRecording) {
+          cloudRecordingSpeech.current = ownedHandle;
         } else {
           localSpeech.current = handle;
         }
       } catch (failure) {
+        releaseTap();
         if (
           recorder.current !== instance ||
           speechGeneration !== recordSpeechGeneration.current
@@ -2487,16 +2529,18 @@ Tools and controls depend on the current interface; open the relevant surface be
   ) => {
     source?.throwIfAborted();
     await recordingsReady.current;
-    if (currentSettings().speech === "cloud") {
-      await duplexOpening.current;
+    const cloudRecording = currentSettings().speech === "cloud";
+    if (cloudRecording) {
+      await voiceRelease.current;
+      await duplexOpening.current?.catch(recordingFailure);
       source?.throwIfAborted();
     }
     if (recorder.current) {
       throw new Error(t("fcboard.a_recording_is_running_or_being_saved"));
     }
     narrator.current?.stop();
-    const liveDuplex = duplexSpeech.current;
-    const duplexInput = duplexSpeech.current?.stream;
+    let liveDuplex = duplexSpeech.current;
+    let duplexInput = liveDuplex?.stream;
     const handoff =
       !duplexInput &&
       !!voiceTurns.current &&
@@ -2524,7 +2568,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       recordingVoiceCommand.current = true;
     }
     transcript.current = [];
-    recordUsesCloud.current = currentSettings().speech === "cloud";
+    recordUsesCloud.current = cloudRecording;
     recordingSpeakers.current.clear();
     setInterimTranscript(null);
     setElapsed(0);
@@ -2532,7 +2576,28 @@ Tools and controls depend on the current interface; open the relevant surface be
     recorder.current = instance;
     setRecordPhase("starting");
     try {
-      await liveDuplex?.prepareRecording?.();
+      if (cloudRecording && liveDuplex) {
+        try {
+          if (!liveDuplex.prepareRecording) {
+            throw new Error(t("fcboard.stop_voice_input_before_recording"));
+          }
+          await liveDuplex.prepareRecording();
+        } catch {
+          const interrupted = liveDuplex;
+          await interrupted.cancel();
+          if (duplexSpeech.current === interrupted) {
+            duplexSpeech.current = null;
+            localSpeech.current = null;
+            invalidateVoice();
+            setListening(false);
+          }
+          liveDuplex = null;
+        }
+      } else {
+        await liveDuplex?.prepareRecording?.();
+      }
+      source?.throwIfAborted();
+      duplexInput = cloudRecording ? undefined : liveDuplex?.stream;
       await instance.start(
         selectedMode,
         () => {
@@ -2546,21 +2611,18 @@ Tools and controls depend on the current interface; open the relevant surface be
         duplexInput,
       );
       if (
+        !cloudRecording &&
         liveDuplex &&
         duplexSpeech.current === liveDuplex &&
         liveDuplex.useRecordingStream
       ) {
-        await liveDuplex
-          .useRecordingStream(instance.audioStream)
-          .catch((failure) => {
-            if (!recordUsesCloud.current) {
-              throw failure;
-            }
-            setError(errorMessage(failure));
-          });
+        await liveDuplex.useRecordingStream(instance.audioStream);
       }
       if (duplexInput || (liveDuplex && duplexSpeech.current === liveDuplex)) {
         recordingVoiceCommand.current = true;
+        if (cloudRecording && !voiceTurns.current) {
+          beginVoiceTurns();
+        }
       }
       source?.throwIfAborted();
     } catch (failure) {
@@ -2609,6 +2671,8 @@ Tools and controls depend on the current interface; open the relevant surface be
     const resumeListening =
       keepDuplex ||
       (!!source && recordingVoiceCommand.current && !!voiceTurns.current);
+    const cloudRecording = recordUsesCloud.current;
+    const restoreCapture = () => duplexSpeech.current?.restoreCapture?.();
     try {
       recordingVoiceCommand.current = false;
       if (!resumeListening) {
@@ -2616,65 +2680,54 @@ Tools and controls depend on the current interface; open the relevant surface be
         setListening(false);
       }
       const instance = recorder.current!;
-      const cloudRecording = recordUsesCloud.current;
-      // End media at the click, retaining its source track until cloud ASR drains.
-      if (cloudRecording && recordPausedAt.current === undefined) {
+      const stopped = instance.stop();
+      void stopped.catch(() => {});
+      const finishTranscript = async () => {
         try {
-          instance.pause();
-        } catch {
-          // The MediaRecorder stop event may have already arrived.
+          if (cloudRecording) {
+            await recordSpeechTask.current;
+            const handle = cloudRecordingSpeech.current;
+            cloudRecordingSpeech.current = null;
+            await handle?.stop();
+          } else if (duplexSpeech.current) {
+            await duplexSpeech.current.flush();
+          } else {
+            await localSpeech.current?.stop();
+          }
+        } catch (failure) {
+          setError(
+            t(
+              "fcboard.the_recording_is_being_saved_could_not_finish_the_transcript_error",
+              { error: errorMessage(failure) },
+            ),
+          );
         }
-      }
-      let stopped = cloudRecording ? undefined : instance.stop();
-      void stopped?.catch(() => {});
-      await recordControlTask.current?.catch(recordingFailure);
-      try {
-        if (cloudRecording) {
-          await recordSpeechTask.current;
-          const handle =
-            duplexRecordingSpeech.current ||
-            (!duplexSpeech.current ? localSpeech.current : null);
-          duplexRecordingSpeech.current = null;
-          await handle?.stop();
-        } else if (duplexSpeech.current) {
-          await duplexSpeech.current.flush();
-        } else {
-          await localSpeech.current?.stop();
+        if (!keepDuplex) {
+          localSpeech.current = null;
         }
-      } catch (failure) {
-        setError(
-          t(
-            "fcboard.the_recording_is_being_saved_could_not_finish_the_transcript_error",
-            {
-              error: errorMessage(failure),
-            },
-          ),
-        );
+        duplexTranscript.current = null;
+        recordSpeechGeneration.current++;
+        setInterimTranscript(null);
+        stopSpeech.current?.();
+        stopSpeech.current = null;
+      };
+      if (!cloudRecording) {
+        await recordControlTask.current?.catch(recordingFailure);
+        await finishTranscript();
+        await restoreCapture();
       }
-      stopped ||= instance.stop();
-      if (!keepDuplex) {
-        localSpeech.current = null;
-      }
-      duplexTranscript.current = null;
-      recordSpeechGeneration.current++;
-      setInterimTranscript(null);
-      stopSpeech.current?.();
-      stopSpeech.current = null;
       const result = await stopped;
-      await duplexSpeech.current?.restoreCapture?.().catch((failure) => {
-        if (!cloudRecording) {
-          throw failure;
-        }
-        setError(errorMessage(failure));
-      });
-      recorder.current = null;
       setRecording(false);
+      const recordedLines = () => {
+        const lines = [...transcript.current];
+        return cloudRecording ? lines.sort((a, b) => a.time - b.time) : lines;
+      };
       let item: Recording = {
         ...result,
         id: crypto.randomUUID(),
         created: Date.now(),
         mode: recordMode.current,
-        transcript: [...transcript.current],
+        transcript: recordedLines(),
         summary: "",
         ...(cloudRecording ? { cloudTranscript: true } : {}),
       };
@@ -2699,6 +2752,22 @@ Tools and controls depend on the current interface; open the relevant surface be
       if (!saved) {
         await exportRecording();
       }
+      if (cloudRecording) {
+        await recordControlTask.current?.catch(recordingFailure);
+        await finishTranscript();
+        item = { ...item, transcript: recordedLines() };
+        await persistRecords(
+          recordsRef.current.map((value) =>
+            value.id === item.id ? item : value,
+          ),
+        );
+        if (keepDuplex) {
+          voiceTurns.current?.stop();
+          voiceTurns.current = null;
+        }
+        voiceRelease.current = restoreCapture()?.catch(recordingFailure);
+      }
+      recorder.current = null;
       if (currentSettings().speech === "custom") {
         try {
           item = { ...item, transcript: await transcribe(item.blob) };
@@ -2737,6 +2806,16 @@ Tools and controls depend on the current interface; open the relevant surface be
         await exportRecording();
       }
     } catch (failure) {
+      if (cloudRecording) {
+        recordSpeechGeneration.current++;
+        const handle = cloudRecordingSpeech.current;
+        cloudRecordingSpeech.current = null;
+        voiceRelease.current = (async () => {
+          await handle?.cancel().catch(recordingFailure);
+          await recordSpeechTask.current?.catch(recordingFailure);
+          await restoreCapture();
+        })().catch(recordingFailure);
+      }
       recorder.current?.dispose();
       recorder.current = null;
       setRecording(false);
@@ -2774,7 +2853,7 @@ Tools and controls depend on the current interface; open the relevant surface be
           setRecordPhase("paused");
           if (
             (recordingVoiceCommand.current && voiceTurns.current) ||
-            (duplexSpeech.current && recordUsesCloud.current)
+            recordUsesCloud.current
           ) {
             recordSpeechPausedForCommands.current = true;
             recordCommandPauses.current.push({ start: recordPausedAt.current });
@@ -2805,7 +2884,11 @@ Tools and controls depend on the current interface; open the relevant surface be
           recordSpeechPausedForCommands.current = false;
           setRecordingPaused(false);
           setRecordPhase("recording");
-          if (!localSpeech.current && !stopSpeech.current) {
+          if (
+            !localSpeech.current &&
+            !cloudRecordingSpeech.current &&
+            !stopSpeech.current
+          ) {
             await (recordSpeechTask.current = startRecordingSpeech(instance));
           }
         }

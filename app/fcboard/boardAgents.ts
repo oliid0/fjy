@@ -10,7 +10,11 @@ import {
 import { currentSettings, defaults, ARK_VISION_MODEL } from "./settings";
 import { agentResponsesEndpoint, runResponsesAgent } from "./responsesAgent";
 import { describeBoardTools } from "./realtimeTools";
-import { boardObservationAfterTools, observeBoard } from "./boardObservation";
+import {
+  boardObservationAfterTools,
+  boardViewContext,
+  observeBoard,
+} from "./boardObservation";
 
 import type { Message } from "./ai";
 import type { BoardAgentAction } from "./agent";
@@ -44,7 +48,7 @@ export const voiceBoardCommand = (
   command: Command,
   cloud = currentSettings().speech !== "local",
 ): Command => {
-  if (cloud && command.name === "record.start") {
+  if (currentSettings().speech === "cloud" && command.name === "record.start") {
     return { name: "record.open" };
   }
   if (
@@ -212,9 +216,7 @@ export const registerBoardAgents = () => {
           prompt: task.prompt,
           sourceIds: task.sourceIds,
           canvas: classroomCommands.read("canvas"),
-          visible: visible
-            ? { text: visible.text, name: visible.name, page: visible.page }
-            : undefined,
+          visible: boardViewContext(visible),
           conversation: classroomCommands.read("conversation"),
           tasks: classroomCommands.read("agents"),
           results: results.length ? results : undefined,

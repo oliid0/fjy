@@ -75,6 +75,18 @@ beforeEach(() => {
       },
     );
   vi.spyOn(
+    HTMLDivElement.prototype,
+    "getBoundingClientRect",
+  ).mockImplementation(function (this: HTMLDivElement) {
+    if (!this.classList.contains("fc-split-bottom")) {
+      return new DOMRect();
+    }
+    const second =
+      this.closest("section")?.getAttribute("aria-label") ===
+      t("fcboard.split_pane", { number: 2 });
+    return new DOMRect(second ? 300 : 0, 455, 300, 45);
+  });
+  vi.spyOn(
     HTMLCanvasElement.prototype,
     "getBoundingClientRect",
   ).mockImplementation(function (this: HTMLCanvasElement) {
@@ -102,6 +114,10 @@ it("mounts independent persistent native panes and updates real export ink witho
     overlayPreview: true,
     multiStroke: true,
     color: "#000000",
+    blocked: expect.arrayContaining([
+      [0, 455, 300, 500],
+      [300, 455, 600, 500],
+    ]),
   });
   expect(right.owner).not.toBe(left.owner);
   expect(backend.restore).toHaveBeenCalledTimes(2);
@@ -168,7 +184,7 @@ it("mounts independent persistent native panes and updates real export ink witho
       button,
       Object.assign(
         new Event("pointerdown", { bubbles: true, cancelable: true }),
-        { button: 0 },
+        { button: -1, pointerType: "touch" },
       ),
     );
     await waitFor(() =>

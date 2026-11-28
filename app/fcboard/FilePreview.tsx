@@ -78,7 +78,7 @@ import { DocumentNavigator } from "./DocumentNavigator";
 import { DocumentTextEditor } from "./DocumentTextEditor";
 import { validImageCrop } from "./imageCropGeometry";
 import { renderInsertion } from "./insertObjects";
-import { Classroom as NativeClassroom } from "./native";
+import { captureRegion, Classroom as NativeClassroom } from "./native";
 import { useDeviceInkProfile } from "./ink";
 import {
   latestShapeInk,
@@ -117,7 +117,7 @@ import { chat, visualMessage } from "./ai";
 import { ARK_VISION_MODEL, currentSettings } from "./settings";
 import { selectionPathBounds } from "./selection";
 import { answerFontSize, layoutBoardText } from "./textLayout";
-import { prepareInkWriting, inkStrokeStyle } from "./inkWriting";
+import { inkRegion, inkStrokeStyle, prepareInkWriting } from "./inkWriting";
 import { documentInkElement, documentStrokeGeometry } from "./documentInk";
 import {
   calculationAnswerText,
@@ -282,22 +282,6 @@ const OdfOfficeView = lazy(() =>
     default: module.OdfOfficeView,
   })),
 );
-
-const windowCaptureArea = (view: HTMLElement) => {
-  const rect = view.getBoundingClientRect();
-  const x = Math.max(0, rect.left);
-  const y = Math.max(0, rect.top);
-  const width = Math.min(innerWidth, rect.right) - x;
-  const height = Math.min(innerHeight, rect.bottom) - y;
-  return width > 0 && height > 0
-    ? {
-        x: x / innerWidth,
-        y: y / innerHeight,
-        width: width / innerWidth,
-        height: height / innerHeight,
-      }
-    : undefined;
-};
 
 export const FilePreview = ({
   api,
@@ -542,7 +526,9 @@ export const FilePreview = ({
       `document.voice.frame.${objectId}`,
       "@internal",
       async ({ previousStamp }) => {
-        const region = dialog.current && windowCaptureArea(dialog.current);
+        const region =
+          dialog.current &&
+          captureRegion(dialog.current.getBoundingClientRect());
         if (!region) {
           return;
         }
@@ -1206,8 +1192,30 @@ export const FilePreview = ({
       ),
       classroomCommands.register(
         "document.erase",
-        "Erase document annotations by args.ids, or the current annotation selection when omitted.",
+        "Erase document annotations by args.ids, the current selection when omitted, or ink inside args.region using canvas.erase coordinates. The source document is preserved.",
         (args) => {
+          if (args.region !== undefined) {
+            if (args.ids !== undefined) {
+              throw new Error(t("fcboard.invalid_selection_format"));
+            }
+            const { viewport, scale } = visibleDocumentArea(
+              stage.current,
+              size,
+              zoomRef.current,
+              scroll,
+            );
+            const region = inkRegion(args, viewport);
+            const page = pageRef.current;
+            const previous = inkRef.current[page] || [];
+            const next = eraseDocumentRegion(previous, region, 0.125 / scale);
+            if (next === previous) {
+              throw new Error(t("fcboard.select_an_object_first"));
+            }
+            commitInk({ ...inkRef.current, [page]: next });
+            selectedInkRef.current = [];
+            setLasso([]);
+            return { changed: true };
+          }
           const ids =
             args.ids === undefined ? selectedInkRef.current : args.ids;
           const chosen = commandObjectIds(
@@ -2061,16 +2069,42 @@ export const FilePreview = ({
               ink: snapshotInk,
             };
           }
-          const region = dialog.current && windowCaptureArea(dialog.current);
-          if (Capacitor.isNativePlatform() && region) {
-            const capture = await NativeClassroom.captureFrame({ region });
-            return {
-              text,
-              name: file.name,
-              page: pageRef.current + 1,
-              image: capture.image,
-              ink: snapshotInk,
+          if (Capacitor.isNativePlatform() && dialog.current) {
+            const rect = stage.current?.getBoundingClientRect();
+            const { viewport, scale } = visibleDocumentArea(
+              stage.current,
+              size,
+              zoomRef.current,
+              scroll,
+            );
+            const client = rect && {
+              left: rect.left + viewport.left * scale,
+              top: rect.top + (viewport.top - scroll) * scale,
+              right: rect.left + viewport.right * scale,
+              bottom: rect.top + (viewport.bottom - scroll) * scale,
             };
+            const area =
+              args.screen === true &&
+              client &&
+              client.left >= 0 &&
+              client.top >= 0 &&
+              client.right <= innerWidth &&
+              client.bottom <= innerHeight
+                ? captureRegion(client)
+                : undefined;
+            const region =
+              area || captureRegion(dialog.current.getBoundingClientRect());
+            if (region) {
+              const capture = await NativeClassroom.captureFrame({ region });
+              return {
+                text,
+                name: file.name,
+                page: pageRef.current + 1,
+                image: capture.image,
+                ink: snapshotInk,
+                ...(area ? { imageViewport: viewport } : {}),
+              };
+            }
           }
           const markup = html
             ? await renderDocumentMarkup(html)
@@ -2186,6 +2220,13 @@ export const FilePreview = ({
             inkRef.current[page] || [],
             true,
           );
+          if (
+            (inkRef.current[page] || []).some(
+              (stroke) => replaced.has(stroke.id) && stroke.locked,
+            )
+          ) {
+            throw new Error(t("fcboard.selection_unlock_first"));
+          }
           const signature = () =>
             documentSourceSignature(
               (inkRef.current[page] || []).filter((stroke) =>

@@ -341,6 +341,9 @@ const SplitPane = ({
     native.current?.update();
   }, [disabled, resizing, tool, eraser]);
   const chooseTool = (value: number, erase: number) => {
+    if (disabled || (model.color === value && (model.eraser || 0) === erase)) {
+      return;
+    }
     model.color = value;
     model.eraser = erase;
     nativeStyle.current = {
@@ -520,7 +523,7 @@ const SplitPane = ({
                   aria-pressed={!eraser && tool === value}
                   disabled={disabled}
                   onPointerDown={(event) => {
-                    if (event.button === 0) {
+                    if (event.pointerType !== "mouse" || event.button === 0) {
                       event.preventDefault();
                       event.stopPropagation();
                       chooseTool(value, 0);
@@ -544,7 +547,7 @@ const SplitPane = ({
               aria-pressed={eraser === 90}
               disabled={disabled}
               onPointerDown={(event) => {
-                if (event.button === 0) {
+                if (event.pointerType !== "mouse" || event.button === 0) {
                   event.preventDefault();
                   event.stopPropagation();
                   chooseTool(tool, 90);

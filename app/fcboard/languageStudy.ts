@@ -185,7 +185,11 @@ export const explainLanguage = async (
         ...settings,
         model: image ? settings.model : settings.textModel || settings.model,
       },
-      { maxTokens: 1536 },
+      {
+        maxTokens: 1536,
+        useVisionModel: !!image,
+        quickVision: true,
+      },
     );
     signal.throwIfAborted();
     const result = parseLanguageStudy(response);

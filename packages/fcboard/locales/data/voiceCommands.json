@@ -5,7 +5,104 @@
     "(?:然后|接着|随后|并且|之后|并讲解|同时(?:打开|使用|开始|插入|录制))",
     "\\b(?:then|afterwards|and then|and (?:start|open|insert|explain|generate))\\b"
   ],
+  "operation": [
+    "^(?:请|帮我|麻烦你|请帮我|能不能|能帮我|可以帮我)?\\s*(?:在(?:当前)?(?:(?:白板|板|画布)[上里中]?(?:的)?)?(?:空白处|中间|中央|左侧|右侧)?\\s*)?(?:手写|板书|手绘|绘制|画(?:一个|个|一张|出|三角形|电路图|示意图|\\s*[yz]\\s*(?:=|等于))|写(?:下|上|一个|一段|个|标题)|插入|添加|移除|删除|擦掉|擦除|修改|更改|切换|打开|关闭|启动|开启|新建|保存|移动|放大|缩小|生成|出[几一二三四五六七八九十0-9]+道)",
+    "^(?:please\\s+|(?:can|could|would) you\\s+)?(?:draw|sketch|handwrite|write|insert|add|remove|erase|delete|move|resize|change|switch|open|close|start|stop|save|create|generate|plot)\\b"
+  ],
   "rules": [
+    {
+      "patterns": ["^(?:请|帮我)?(?:打开|显示)计时器$", "^(?:please)?(?:open|show)(?:the)?timer$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.timer", "args": { "action": "open" } }
+    },
+    {
+      "patterns": [
+        "^(?:请|帮我)?(?:开始(?:计时|倒计时)|(?:计时|倒计时)(?=[一二三四五六七八九十\\d]))(?:([一二三四五六七八九十\\d]+)(分钟|秒钟|分|秒))?$",
+        "^(?:please)?start(?:the)?(?:timer|countdown)(?:for(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(minutes?|mins?|seconds?|secs?))?$"
+      ],
+      "compact": true,
+      "cloudOnly": true,
+      "kind": "timer"
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:关闭计时器|停止计时)$", "^(?:please)?(?:close|stop)(?:the)?timer$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.timer", "args": { "action": "close" } }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:打开|显示)幕布$", "^(?:please)?(?:open|show)(?:the)?curtain$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.curtain" }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:打开|显示)计算器$", "^(?:please)?(?:open|show)(?:the)?calculator$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.calculator" }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?打开(?:随机)?点名(?:器)?$", "^(?:please)?open(?:the)?rollcall$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.rollcall" }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?打开投票$", "^(?:please)?open(?:the)?voting(?:panel)?$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.vote", "args": { "action": "open" } }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:开启|启动|开始)投屏$", "^(?:please)?start(?:screen)?projection$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "projection.start" }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:关闭|结束|停止)投屏$", "^(?:please)?(?:stop|close)(?:screen)?projection$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "projection.stop" }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:切到|切换到|打开|开启)(?:双|二|两|2)分屏$", "^(?:please)?(?:opentwo|switchtotwo|starttwo)(?:panes|waysplit)$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.split", "args": { "open": true, "count": 2 } }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:切到|切换到|打开|开启)(?:三|3)分屏$", "^(?:please)?(?:openthree|switchtothree|startthree)(?:panes|waysplit)$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.split", "args": { "open": true, "count": 3 } }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:不保存退出分屏|退出分屏不保存)$", "^(?:please)?(?:exit|close)(?:thesplit|splitview)withoutsaving$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "tools.split", "args": { "open": false } }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?打开协同白板$", "^(?:please)?open(?:the)?(?:collaboration|collaborativeboard)$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "network.panel", "args": { "panel": "collab" } }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:将|把)?(?:保存|导出)(?:当前(?:白板|页)?|白板)?(?:为|成)(?:pdf|paf)$", "^(?:please)?(?:save|export)(?:the)?(?:current)?(?:board|page)?(?:as)?pdf$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "board.saveFile", "args": { "format": "pdf" } }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:将|把)?(?:保存|导出)(?:当前(?:白板|页)?|白板)?(?:为|成)(?:图片|jpg|jpeg)$", "^(?:please)?(?:save|export)(?:the)?(?:current)?(?:board|page)?(?:as)?(?:an)?(?:image|jpg|jpeg)$"],
+      "compact": true,
+      "cloudOnly": true,
+      "command": { "name": "board.saveFile", "args": { "format": "jpg" } }
+    },
     {
       "patterns": ["^(?:(?:please\\s+)?(?:stop|cancel|stop talking)|(?:请)?(?:停止|取消|别说了|停下|停一下|等一下))[。.!！?？\\s]*$", "^(?:please\\s+)?(?:stop|cancel|stop talking)[.!?\\s]*$"],
       "compact": false,

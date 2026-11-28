@@ -5,6 +5,23 @@ import type { PageLocalization } from "./pageLocalization";
 import type { PluginListenerHandle } from "@capacitor/core";
 
 export type Upload = { id: string; name: string; path: string; size: number };
+
+export const captureRegion = (
+  rect: Pick<DOMRect, "left" | "top" | "right" | "bottom">,
+) => {
+  const left = Math.max(0, rect.left);
+  const top = Math.max(0, rect.top);
+  const right = Math.min(innerWidth, rect.right);
+  const bottom = Math.min(innerHeight, rect.bottom);
+  if (right > left && bottom > top) {
+    return {
+      x: left / innerWidth,
+      y: top / innerHeight,
+      width: (right - left) / innerWidth,
+      height: (bottom - top) / innerHeight,
+    };
+  }
+};
 export type FactoryTool =
   | "transfer"
   | "vote"

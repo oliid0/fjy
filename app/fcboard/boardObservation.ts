@@ -2,12 +2,23 @@ import { agentContext } from "./agent";
 import { visualMessage } from "./ai";
 import { classroomCommands, executeBoardCommand } from "./commands";
 
+import type { ContentRect } from "./placement";
+
 export type BoardView = {
   image?: string;
+  imageViewport?: ContentRect;
   text?: string;
   name?: string;
   page?: number;
 };
+
+export const boardViewContext = (view?: BoardView) =>
+  view && {
+    text: view.text,
+    name: view.name,
+    page: view.page,
+    imageViewport: view.imageViewport,
+  };
 
 export const boardObservationState = () => ({
   canvas: classroomCommands.read("canvas"),
@@ -98,9 +109,7 @@ export const boardObservationAfterTools = (
           : "Use the live component state to verify the effect of the action."
       }\n${agentContext({
         ...state,
-        visible: view
-          ? { name: view.name, page: view.page, text: view.text }
-          : undefined,
+        visible: boardViewContext(view),
       })}`,
       view?.image,
     );

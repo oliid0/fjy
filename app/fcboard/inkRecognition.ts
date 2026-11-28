@@ -69,18 +69,31 @@ export const calculationAnswerText = (
       : "= "
   }${result.answer}`;
 
-export const inkRecognitionDelay = (mode: InkAssistMode, strokes: InkInput) =>
-  mode === "calculation" && calculationInk(strokes).complete
-    ? 0
-    : mode === "function" || mode === "calculation"
-    ? 1200
+export const inkRecognitionDelay = (mode: InkAssistMode, strokes: InkInput) => {
+  if (mode === "calculation" && calculationInk(strokes).complete) {
+    return 0;
+  }
+  const settings = currentSettings();
+  if (
+    ((mode === "function" || mode === "calculation") &&
+      settings.mathTranscription === "cloud") ||
+    (mode === "language" && settings.translationProvider === "cloud")
+  ) {
+    // Briefly coalesce the last character's strokes, then send one request.
+    return 250;
+  }
+  return mode === "function" || mode === "calculation"
+    ? 350
     : mode === "magic"
     ? 1600
     : mode === "shape"
     ? 450
+    : mode === "language"
+    ? 350
     : 700;
+};
 
-/** An explicit completion mark needs no additional whole-expression pause. */
+/** Let local inference use the first half of the whole-expression pause. */
 export const settleInkRecognition = async (
   mode: InkAssistMode,
   since: number,
@@ -90,8 +103,9 @@ export const settleInkRecognition = async (
   signal.throwIfAborted();
   const remaining =
     (mode === "function" || mode === "calculation") &&
+    currentSettings().mathTranscription === "local" &&
     !(mode === "calculation" && calculationInk(strokes).complete)
-      ? inkRecognitionDelay(mode, strokes) - (Date.now() - since)
+      ? 700 - (Date.now() - since)
       : 0;
   if (remaining <= 0) {
     return;
@@ -177,7 +191,12 @@ export async function recognizeInkContent(
         ],
         signal,
         settings,
-        { maxTokens: 2048, timeoutMs: 20000, useVisionModel: true },
+        {
+          maxTokens: mode === "calculation" ? 512 : 2048,
+          timeoutMs: 20000,
+          useVisionModel: true,
+          quickVision: true,
+        },
       )
     ).trim();
     signal.throwIfAborted();
@@ -276,7 +295,7 @@ export async function recognizeInkContent(
       choose?: (candidates: readonly string[]) => Promise<string>,
       localOnly?: boolean,
     ] =
-      mode === "language"
+      mode === "language" || mode === "function" || mode === "calculation"
         ? [languageHint, chooseCandidate, true]
         : chooseCandidate
         ? [languageHint, chooseCandidate]

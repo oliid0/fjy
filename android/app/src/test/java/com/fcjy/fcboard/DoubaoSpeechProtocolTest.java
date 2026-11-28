@@ -65,4 +65,21 @@ public class DoubaoSpeechProtocolTest {
         byte[] unsupported = DoubaoSpeechProtocol.frame(9, 1, "{}".getBytes(StandardCharsets.UTF_8)); unsupported[2] = 0x12;
         try { DoubaoSpeechProtocol.parse(unsupported); fail(); } catch (java.io.IOException expected) { }
     }
+
+    @Test public void overlappingSpeakersWithEqualOrEarlierEndTimesAreNotLostOrReplayed() throws Exception {
+        DoubaoSpeechProtocol decoder = new DoubaoSpeechProtocol();
+        JSONObject first = new JSONObject().put("text", "方案需要提醒").put("start_time", 1000).put("end_time", 3000)
+            .put("definite", true).put("additions", new JSONObject().put("speaker_id", "0"));
+        JSONObject second = new JSONObject(first.toString()).put("text", "也需要减少操作")
+            .put("additions", new JSONObject().put("speaker_id", "1"));
+        JSONObject earlier = new JSONObject(second.toString()).put("start_time", 1800).put("end_time", 2500).put("text", "同意");
+        JSONObject body = new JSONObject().put("result", new JSONObject().put("utterances",
+            new JSONArray().put(first).put(second).put(earlier)));
+        JSONArray lines = decoder.lines(body);
+        assertEquals(3, lines.length());
+        assertEquals("0", lines.getJSONObject(0).getString("speaker"));
+        assertEquals("1", lines.getJSONObject(1).getString("speaker"));
+        assertEquals("同意", lines.getJSONObject(2).getString("text"));
+        assertEquals(0, decoder.lines(body).length());
+    }
 }

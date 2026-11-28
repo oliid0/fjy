@@ -1,7 +1,12 @@
 import * as i18n from "@fcboard/fcboard/i18n";
 
 import * as ai from "./ai";
-import { calculationAnswerText, recognizeInkContent } from "./inkRecognition";
+import {
+  calculationAnswerText,
+  recognizeInkContent,
+  inkRecognitionDelay,
+  settleInkRecognition,
+} from "./inkRecognition";
 import { defaults, saveSettings } from "./settings";
 import { languageStudy } from "./test/language";
 import * as ocr from "./ocr";
@@ -386,5 +391,71 @@ it.each(["The answer is 2.", "1+1=2", "∅"])(
         new AbortController().signal,
       ),
     ).rejects.toThrow();
+  },
+);
+
+it("starts all three pens promptly and overlaps local math inference with the completion pause", async () => {
+  saveSettings(
+    { ...defaults, mathTranscription: "cloud", translationProvider: "cloud" },
+    false,
+  );
+  expect(inkRecognitionDelay("function", [])).toBe(250);
+  expect(inkRecognitionDelay("calculation", [])).toBe(250);
+  expect(inkRecognitionDelay("language", [])).toBe(250);
+  const timer = vi.spyOn(globalThis, "setTimeout");
+  await settleInkRecognition(
+    "function",
+    Date.now() - 250,
+    new AbortController().signal,
+  );
+  expect(timer).not.toHaveBeenCalled();
+  saveSettings(
+    { ...defaults, mathTranscription: "local", translationProvider: "local" },
+    false,
+  );
+  expect(inkRecognitionDelay("function", [])).toBe(350);
+  expect(inkRecognitionDelay("calculation", [])).toBe(350);
+  expect(inkRecognitionDelay("language", [])).toBe(350);
+  vi.useFakeTimers();
+  try {
+    const commit = vi.fn();
+    const complete = settleInkRecognition(
+      "function",
+      Date.now() - 350,
+      new AbortController().signal,
+    ).then(commit);
+    await vi.advanceTimersByTimeAsync(349);
+    expect(commit).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await complete;
+    expect(commit).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it.each(["calculation", "function"] as const)(
+  "uses exactly one fast cloud %s request with no OCR or AI review",
+  async (mode) => {
+    saveSettings(
+      { ...defaults, apiKey: "configured", mathTranscription: "cloud" },
+      false,
+    );
+    const model = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValue(mode === "function" ? "y=x" : "2");
+    const ocrCall = vi.spyOn(ocr, "recognizeHandwriting");
+    await recognizeInkContent(
+      mode,
+      async () => "data:image/png;base64,ink",
+      [],
+      new AbortController().signal,
+    );
+    expect(model).toHaveBeenCalledTimes(1);
+    expect(model.mock.calls[0][3]).toMatchObject({
+      quickVision: true,
+      useVisionModel: true,
+    });
+    expect(ocrCall).not.toHaveBeenCalled();
   },
 );

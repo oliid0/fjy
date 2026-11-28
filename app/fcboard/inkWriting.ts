@@ -1,20 +1,35 @@
-import { DEFAULT_ELEMENT_PROPS, FONT_FAMILY } from "@fcboard/common";
+import {
+  DEFAULT_ELEMENT_PROPS,
+  FONT_FAMILY,
+  getSizeFromPoints,
+} from "@fcboard/common";
 import { convertToFcboardElements } from "@fcboard/fcboard";
 import { Fonts } from "@fcboard/fcboard/fonts/Fonts";
 import { getCommonBounds, newFreeDrawElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 import { t } from "@fcboard/fcboard/i18n";
 import { whiteboardInkStyle } from "@fcboard/fcboard/whiteboardPen";
+import { createEraseRegion } from "@fcboard/fcboard/eraser/region";
 
 import type { FactoryInkData } from "@fcboard/element/factoryInk";
+import type { GlobalPoint, LocalPoint } from "@fcboard/math";
 
 import { inkLineHeight, supportsHandwriting } from "./handwriting";
 import { noWritingSpace, prepareLessonText } from "./lessonWriting";
+import { classroomCommands } from "./commands";
 
 import type { InkInput } from "./digitalInk";
 
 import type { ContentRect } from "./placement";
 import type { LessonWritingContext } from "./lessonWriting";
+
+const inkPoint = (value: unknown): value is [number, number] =>
+  Array.isArray(value) &&
+  value.length === 2 &&
+  value.every(
+    (coordinate) =>
+      typeof coordinate === "number" && Number.isFinite(coordinate),
+  );
 
 /** Reject a whole malformed request before either canvas changes any object. */
 export const validateInkInput = (value: unknown): InkInput => {
@@ -28,15 +43,7 @@ export const validateInkInput = (value: unknown): InkInput => {
         Array.isArray(stroke) &&
         stroke.length > 0 &&
         (count += stroke.length) <= 100000 &&
-        stroke.every(
-          (point) =>
-            Array.isArray(point) &&
-            point.length === 2 &&
-            point.every(
-              (coordinate) =>
-                typeof coordinate === "number" && Number.isFinite(coordinate),
-            ),
-        ),
+        stroke.every(inkPoint),
     )
   ) {
     throw new Error(
@@ -44,6 +51,72 @@ export const validateInkInput = (value: unknown): InkInput => {
     );
   }
   return value;
+};
+
+/** A single unwrapped path and a batch use the same canonical trajectories. */
+const inkPaths = (value: unknown) =>
+  validateInkInput(
+    Array.isArray(value) && value.length && inkPoint(value[0])
+      ? [value]
+      : value,
+  );
+
+/** Map normalized viewport coordinates through the same visible bounds as board_inspect. */
+export const inkCoordinates = (
+  strokes: InkInput,
+  args: Record<string, unknown>,
+  viewport: ContentRect,
+): InkInput => {
+  if (
+    (args.revision !== undefined &&
+      args.revision !== classroomCommands.revision) ||
+    (args.coordinateSpace !== undefined &&
+      args.coordinateSpace !== "scene" &&
+      args.coordinateSpace !== "viewport")
+  ) {
+    throw new Error(t("fcboard.invalid_annotation_coordinates"));
+  }
+  if (args.coordinateSpace !== "viewport") {
+    return strokes;
+  }
+  const { left, top, right, bottom } = viewport;
+  if (
+    ![left, top, right, bottom].every(Number.isFinite) ||
+    right <= left ||
+    bottom <= top ||
+    strokes.some((stroke) =>
+      stroke.some(([x, y]) => x < 0 || y < 0 || x > 1000 || y > 1000),
+    )
+  ) {
+    throw new Error(t("fcboard.invalid_annotation_coordinates"));
+  }
+  return strokes.map((stroke) =>
+    stroke.map(([x, y]) => [
+      left + ((right - left) * x) / 1000,
+      top + ((bottom - top) * y) / 1000,
+    ]),
+  );
+};
+
+export const inkRegion = (
+  args: Record<string, unknown>,
+  viewport: ContentRect,
+) => {
+  const [points] = inkCoordinates(
+    validateInkInput([args.region]),
+    args,
+    viewport,
+  );
+  if (
+    points.length > 512 ||
+    !createEraseRegion(
+      points.map(([x, y]) => pointFrom<GlobalPoint>(x, y)),
+      0,
+    )
+  ) {
+    throw new Error(t("fcboard.invalid_annotation_coordinates"));
+  }
+  return points;
 };
 
 /** Use the actual pointer renderer's style per command, without changing a concurrent task's pen. */
@@ -92,8 +165,12 @@ export const inkStrokeStyle = (
   return whiteboardInkStyle(
     {
       ...state,
+      whiteboardDualPen: false,
       currentItemPenMode: pen ?? state.currentItemPenMode ?? "hard",
       currentItemInkAssist: undefined,
+      ...(args.color !== undefined
+        ? { currentItemInkGradient: undefined }
+        : {}),
       currentItemStrokeColor:
         typeof args.color === "string"
           ? args.color
@@ -132,7 +209,7 @@ export const prepareInkWriting = async (
   const points =
     text && Array.isArray(args.strokes) && !args.strokes.length
       ? []
-      : validateInkInput(args.strokes);
+      : inkPaths(args.strokes);
   const bounds = args.bounds as ContentRect | undefined;
   if (text) {
     if (
@@ -167,6 +244,9 @@ export const prepareInkWriting = async (
     unit: 1 / ((devicePixelRatio || 1) * style.scale),
     ...style.inkStyle?.customData.fcInk,
     finished: true,
+    centerline: true,
+    subpixel: true,
+    nib: false,
     ...(style.inkStyle?.customData.fcInk.pen === "rainbow"
       ? {
           rainbow: {
@@ -176,14 +256,23 @@ export const prepareInkWriting = async (
         }
       : {}),
   };
-  const raw = points.map((points) =>
-    newFreeDrawElement({
+  const raw = inkCoordinates(points, args, style.viewport).map((points) => {
+    const [originX, originY] = points[0];
+    const local = points.map(([x, y]) =>
+      pointFrom<LocalPoint>(x - originX, y - originY),
+    );
+    if (local.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) {
+      throw new Error(t("fcboard.invalid_annotation_coordinates"));
+    }
+    if (local.length === 1) {
+      local.push(pointFrom<LocalPoint>(0.0001, 0.0001));
+    }
+    return newFreeDrawElement({
       type: "freedraw",
-      x: points[0][0],
-      y: points[0][1],
-      points: points.map(([x, y]) =>
-        pointFrom(x - points[0][0], y - points[0][1]),
-      ),
+      x: originX,
+      y: originY,
+      points: local,
+      ...getSizeFromPoints(local),
       strokeColor: style.inkStyle?.strokeColor ?? style.color,
       strokeWidth: style.inkStyle?.strokeWidth ?? style.width,
       opacity: style.inkStyle?.opacity ?? style.opacity,
@@ -193,8 +282,8 @@ export const prepareInkWriting = async (
         fcGenerated: true,
         fcInk: { ...factoryInk },
       },
-    }),
-  );
+    });
+  });
   const group = crypto.randomUUID();
   if (!text) {
     return raw.map((element) => ({ ...element, groupIds: [group] }));

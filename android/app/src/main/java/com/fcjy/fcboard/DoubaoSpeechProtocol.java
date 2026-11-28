@@ -7,16 +7,16 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /** SAUC v3 framing; see the supplied API reference pp. 98–109 and its Java demo. */
 final class DoubaoSpeechProtocol {
     static final int MAX_PAYLOAD = 2 * 1024 * 1024;
-    private final Set<String> delivered = new HashSet<>();
-    private long latestEnd = -1;
+    private final Map<String, Long> delivered = new LinkedHashMap<>();
+    private long discardedBefore = -1;
 
     static byte[] frame(int type, int sequence, byte[] payload) throws IOException {
         ByteArrayOutputStream compressed = new ByteArrayOutputStream();
@@ -101,13 +101,16 @@ final class DoubaoSpeechProtocol {
                 String text = utterance.optString("text", "").trim();
                 long start = utterance.optLong("start_time", -1);
                 long end = utterance.optLong("end_time", -1);
-                String id = start + ":" + end;
-                if (text.isEmpty() || start < 0 || end < start || end < latestEnd || !delivered.add(id)) { continue; }
-                latestEnd = Math.max(latestEnd, end);
-                if (delivered.size() > 1000) { delivered.clear(); delivered.add(id); }
-                JSONObject line = new JSONObject().put("time", start / 1000.0).put("text", text);
                 JSONObject additions = utterance.optJSONObject("additions");
                 String speaker = additions == null ? "" : additions.optString("speaker_id", "").trim();
+                String id = start + ":" + end + ":" + speaker;
+                if (text.isEmpty() || start < 0 || end < start || end <= discardedBefore || delivered.containsKey(id)) { continue; }
+                delivered.put(id, end);
+                if (delivered.size() > 1000) {
+                    String oldest = delivered.keySet().iterator().next();
+                    discardedBefore = Math.max(discardedBefore, delivered.remove(oldest));
+                }
+                JSONObject line = new JSONObject().put("time", start / 1000.0).put("text", text);
                 if (!speaker.isEmpty() && speaker.length() <= 80) { line.put("speaker", speaker); }
                 lines.put(line);
             }

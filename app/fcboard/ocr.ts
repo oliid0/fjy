@@ -224,7 +224,7 @@ export const recognizeHandwriting = async (
       ) {
         throw error;
       }
-      if (localOnly) {
+      if (localOnly && kind !== "math") {
         throw error;
       }
       // A missing explicitly selected text pack is actionable; other native

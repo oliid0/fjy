@@ -106,14 +106,12 @@ export const createNativeSplitInk = (
       ]);
       const blocked = Array.from(
         document.querySelectorAll<HTMLElement>(
-          ".fc-split-penbar,.fc-split-board button,.fc-split-resize,.fc-split-settings,.fc-split-exit-dialog",
+          ".fc-split-bottom,.fc-split-board > button,.fc-split-resize,.fc-split-settings,.fc-split-exit-dialog",
         ),
       )
-        .filter((node) => node.getClientRects().length)
-        .map((node) => {
-          const box = node.getBoundingClientRect();
-          return [box.left, box.top, box.right, box.bottom];
-        });
+        .map((node) => node.getBoundingClientRect())
+        .filter((box) => box.width > 0 && box.height > 0)
+        .map((box) => [box.left, box.top, box.right, box.bottom]);
       const nextSignature = JSON.stringify([nextViewport, settings, blocked]);
       const restoring =
         installed !== restoreVersion || viewport !== nextViewport;

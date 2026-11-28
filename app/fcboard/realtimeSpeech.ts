@@ -83,8 +83,9 @@ export const startRealtimeSpeech = async (
     current = attempt;
     const deliver = (line: TranscriptLine) => {
       if (!cancelled && !finished && current === attempt && !attempt.recovery) {
-        latestTime = Math.max(latestTime, offset + line.time);
-        onLine({ ...line, time: latestTime });
+        const time = offset + line.time;
+        latestTime = Math.max(latestTime, time);
+        onLine({ ...line, time: separateSpeakers ? time : latestTime });
       }
     };
     const fail = (message: string) => {

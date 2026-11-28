@@ -523,6 +523,40 @@ it("keeps committed work and discards late calls after the task is cancelled", a
   }
 });
 
+it("rejects normalized ink from an outdated viewport and uses the next observed one", async () => {
+  const api = sceneAPI();
+  const state = api.getAppState();
+  let scrollX = 0;
+  api.getAppState = () => ({ ...state, scrollX });
+  const stop = registerCanvasCommands(api);
+  const draw = (id: string) =>
+    call(id, "board_draw", {
+      coordinateSpace: "viewport",
+      strokes: [
+        [500, 300],
+        [600, 300],
+      ],
+    });
+  const post = vi
+    .spyOn(transport, "postAI")
+    .mockImplementationOnce(async () => {
+      scrollX = 120;
+      return response("before-scroll", [draw("old-location")]);
+    })
+    .mockResolvedValueOnce(response("current-view", [draw("current-location")]))
+    .mockResolvedValueOnce(response("done", [done]));
+  try {
+    await runResponsesAgent(options());
+    const replay = post.mock.calls[1][2].input as { output: string }[];
+    expect(JSON.parse(replay[0].output)).toMatchObject({ ok: false });
+    expect(
+      api.getSceneElements().filter((element) => element.type === "freedraw"),
+    ).toHaveLength(1);
+  } finally {
+    stop();
+  }
+});
+
 it("executes a real start-stop-start lifecycle instead of reusing an obsolete successful tool result", async () => {
   let recording = false;
   const start = vi.fn(() => {

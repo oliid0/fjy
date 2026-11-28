@@ -47,7 +47,7 @@ const dragTouch = async (
 };
 
 for (const width of [390, 1920]) {
-  test(`native pen swipes retain all twelve choices and leave tip/width controls working at ${width}`, async ({
+  test(`native pen swipes change pages and leave tip/width controls working at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -60,8 +60,17 @@ for (const width of [390, 1920]) {
     if (!(await settings.isVisible())) {
       await pen.click();
     }
-    const types = settings.locator(".fc-pen-types");
-    await expect(types.getByRole("button")).toHaveCount(12);
+    const types = settings.locator(".fc-pen-page");
+    const basic = settings.getByRole("button", {
+      name: "第 1 页",
+      exact: true,
+    });
+    const functional = settings.getByRole("button", {
+      name: "第 2 页",
+      exact: true,
+    });
+    await expect(types.getByRole("button")).toHaveCount(6);
+    await expect(basic).toHaveAttribute("aria-pressed", "true");
     const slider = settings.getByRole("slider");
     await settings.getByRole("button", { name: "细笔", exact: true }).tap();
     await expect(slider).toHaveValue("2");
@@ -81,7 +90,8 @@ for (const width of [390, 1920]) {
       y: first!.y + first!.height / 2,
     };
     await dragTouch(page, from, { x: from.x - 60, y: from.y + 2 });
-    await expect(types.getByRole("button")).toHaveCount(12);
+    await expect(types.getByRole("button")).toHaveCount(6);
+    await expect(functional).toHaveAttribute("aria-pressed", "true");
     await expect(
       types.getByRole("button", { name: "函数笔", exact: true }),
     ).toBeVisible();
@@ -92,7 +102,7 @@ for (const width of [390, 1920]) {
       y: preview!.y + preview!.height / 2,
     };
     await dragTouch(page, point, { x: point.x + 50, y: point.y });
-    await expect(types.getByRole("button")).toHaveCount(12);
+    await expect(functional).toHaveAttribute("aria-pressed", "true");
     const value = await slider.inputValue();
     const bar = await slider.boundingBox();
     await dragTouch(
@@ -101,7 +111,7 @@ for (const width of [390, 1920]) {
       { x: bar!.x + bar!.width * 0.8, y: bar!.y + bar!.height / 2 },
     );
     await expect(slider).not.toHaveValue(value);
-    await expect(types.getByRole("button")).toHaveCount(12);
+    await expect(functional).toHaveAttribute("aria-pressed", "true");
     const changed = await slider.inputValue();
     const back = await types.getByRole("button").first().boundingBox();
     const start = {
@@ -109,7 +119,7 @@ for (const width of [390, 1920]) {
       y: back!.y + back!.height / 2,
     };
     await dragTouch(page, start, { x: start.x + 60, y: start.y + 2 });
-    await expect(types.getByRole("button")).toHaveCount(12);
+    await expect(basic).toHaveAttribute("aria-pressed", "true");
     await expect(slider).toHaveValue(changed);
   });
 

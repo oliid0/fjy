@@ -1,4 +1,10 @@
-import { CommandRouter, commandObjectIds, directCommand } from "./commands";
+import {
+  CommandRouter,
+  commandObjectIds,
+  directCommand,
+  explicitBoardOperation,
+  verifyBoardCommandResult,
+} from "./commands";
 
 describe("component commands", () => {
   it("rejects deleted targets and permits only an explicit empty selection", () => {
@@ -30,6 +36,25 @@ describe("component commands", () => {
     expect(directCommand("暂停讲解")).toBeNull();
     expect(directCommand("帮我新建白板")?.name).toBe("board.new");
     expect(directCommand("帮我画一条经过这些点的抛物线")).toBeNull();
+  });
+  it("routes cloud timer, split and export requests with the component's actual arguments", () => {
+    expect(directCommand("开始计时三分钟", true)).toEqual({
+      name: "tools.timer",
+      args: { action: "start", seconds: 180 },
+    });
+    expect(directCommand("切到三分屏", true)).toEqual({
+      name: "tools.split",
+      args: { open: true, count: 3 },
+    });
+    expect(directCommand("保存当前页为 paf", true)).toEqual({
+      name: "board.saveFile",
+      args: { format: "pdf" },
+    });
+    expect(directCommand("开始计时三分钟")).toBeNull();
+    expect(directCommand("写下水循环然后打开计时器", true)).toBeNull();
+    expect(explicitBoardOperation("在空白处画三角形")).toBe(true);
+    expect(explicitBoardOperation("在白板空白处画三角形")).toBe(true);
+    expect(explicitBoardOperation("为什么会下雨？")).toBe(false);
   });
   it("recognizes an explicit interruption without confusing it with a recording or lesson action", () => {
     for (const text of [
@@ -268,5 +293,17 @@ it.each([
   "routes the English shortcut %s through its actual component",
   (text, expected) => {
     expect(directCommand(text as string)).toEqual(expected);
+  },
+);
+
+it.each([
+  { ok: false, error: "device failed" },
+  { state: "failed", error: "device failed" },
+])(
+  "rejects an explicit failure receipt instead of letting voice claim success",
+  (receipt) => {
+    expect(() =>
+      verifyBoardCommandResult({ name: "experiment.run" }, receipt),
+    ).toThrow("device failed");
   },
 );

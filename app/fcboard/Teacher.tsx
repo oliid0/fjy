@@ -47,7 +47,9 @@ export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
   const imageRequests = useRef(new Map<string, AbortController>());
   const stopVisibleQuiz = useCallback(() => {
     setQuizBusy(false);
-    if (!quizValue.current) {
+    if (!quizValue.current?.questions.length) {
+      quizValue.current = null;
+      setQuiz(null);
       return;
     }
     const stopped = {
@@ -266,7 +268,7 @@ export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
       }),
       classroomCommands.register(
         "quiz.generate",
-        "Research args.prompt using actual web search and generate original answerable quiz cards for any subject/question type. Wait for completion and return the real title/count. No handwriting input panel is required. Optional args.context={text,image} restricts the source to the selected text/screenshot; otherwise inspect the current board.",
+        "Generate original answerable quiz cards from args.prompt, including subject, count and question types. Wait for actual cards and return their count and any failed items. Optional args.context={text,image} supplies the selected text/screenshot; otherwise use the current board.",
         async (args) => {
           if (typeof args.prompt !== "string" || !args.prompt.trim()) {
             throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
@@ -303,10 +305,16 @@ export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
             true,
           );
           signal.throwIfAborted();
-          if (!result) {
-            throw new Error(t("fcboard.generate_a_quiz_first"));
+          if (!result?.questions.length) {
+            throw new Error(
+              result?.errors?.[0] || t("fcboard.generate_a_quiz_first"),
+            );
           }
-          return { title: result.title, count: result.questions.length };
+          return {
+            title: result.title,
+            count: result.questions.length,
+            ...(result.errors?.length ? { errors: result.errors } : {}),
+          };
         },
       ),
       classroomCommands.register(

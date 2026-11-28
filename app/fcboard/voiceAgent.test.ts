@@ -6,6 +6,8 @@ import { classroomCommands } from "./commands";
 import { defaults, saveSettings } from "./settings";
 import { registerBoardAgents } from "./boardAgents";
 import { runVoiceAgent } from "./voiceAgent";
+import { registerCanvasCommands } from "./canvasCommands";
+import { sceneAPI } from "./test/scene";
 
 beforeEach(() =>
   saveSettings(
@@ -88,8 +90,10 @@ it("accepts a natural Ark Responses answer without forcing a fake board mutation
       status: "completed",
       output: [
         {
-          type: "message",
-          content: [{ type: "output_text", text: "自然回答" }],
+          type: "function_call",
+          name: "voice_answer",
+          call_id: "answer",
+          arguments: JSON.stringify({ text: "自然回答" }),
         },
       ],
     }),
@@ -150,7 +154,12 @@ it.each([
         data: JSON.stringify({ id, status: "completed", output }),
       });
       const text = (value: string) => [
-        { type: "message", content: [{ type: "output_text", text: value }] },
+        {
+          type: "function_call",
+          name: "voice_answer",
+          call_id: "answer",
+          arguments: JSON.stringify({ text: value }),
+        },
       ];
       vi.spyOn(transport, "postAI")
         .mockResolvedValueOnce(
@@ -169,7 +178,7 @@ it.each([
     try {
       expect(
         await runVoiceAgent("请结合板书演示", [], new AbortController().signal),
-      ).toBe("先解释当前概念");
+      ).toBeUndefined();
       expect(
         (classroomCommands.read("agents") as { state: string }[])[0].state,
       ).toBe("running");
@@ -326,8 +335,10 @@ it("sends the current courseware screenshot and text with the cloud utterance", 
       status: "completed",
       output: [
         {
-          type: "message",
-          content: [{ type: "output_text", text: "力等于质量乘以加速度。" }],
+          type: "function_call",
+          name: "voice_answer",
+          call_id: "answer",
+          arguments: JSON.stringify({ text: "力等于质量乘以加速度。" }),
         },
       ],
     }),
@@ -416,8 +427,10 @@ it.each(["chat", "responses"])(
         .mockResolvedValueOnce(
           state("turn2", [
             {
-              type: "message",
-              content: [{ type: "output_text", text: "第二页" }],
+              type: "function_call",
+              name: "voice_answer",
+              call_id: "answer",
+              arguments: JSON.stringify({ text: "第二页" }),
             },
           ]),
         );
@@ -549,8 +562,10 @@ it.each(["chat", "responses"])(
         .mockResolvedValue(
           reply("final", [
             {
-              type: "message",
-              content: [{ type: "output_text", text: summary }],
+              type: "function_call",
+              name: "voice_answer",
+              call_id: "answer",
+              arguments: JSON.stringify({ text: summary }),
             },
           ]),
         );
@@ -585,6 +600,180 @@ it("drops cloud tool output if a manual switch occurs while the original image i
     done();
     await rejected;
     expect(post).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+});
+
+it("does not accept a cloud success message without a real call and continues to draw editable ink", async () => {
+  saveSettings({ ...defaults, apiKey: "configured", speech: "cloud" }, false);
+  const api = sceneAPI();
+  const original = api.getSceneElements();
+  const release = registerCanvasCommands(api);
+  const response = (id: string, output: unknown[]) => ({
+    status: 200,
+    stream: false,
+    data: JSON.stringify({ id, status: "completed", output }),
+  });
+  const post = vi
+    .spyOn(transport, "postAI")
+    .mockResolvedValueOnce(
+      response("empty-success", [
+        {
+          type: "message",
+          content: [{ type: "output_text", text: "已经画好了" }],
+        },
+      ]),
+    )
+    .mockResolvedValueOnce(
+      response("draw", [
+        {
+          type: "function_call",
+          name: "board_draw",
+          call_id: "triangle",
+          arguments: JSON.stringify({
+            strokes: [
+              [
+                [400, 300],
+                [430, 250],
+                [460, 300],
+                [400, 300],
+              ],
+            ],
+          }),
+        },
+      ]),
+    )
+    .mockResolvedValueOnce(
+      response("done", [
+        {
+          type: "message",
+          content: [{ type: "output_text", text: "三角形已写入白板" }],
+        },
+      ]),
+    );
+  try {
+    expect(
+      await runVoiceAgent("在空白处画三角形", [], new AbortController().signal),
+    ).toBe("三角形已写入白板");
+    expect(post.mock.calls[0][2].tool_choice).toBe("required");
+    expect(api.getSceneElements()).toHaveLength(original.length + 1);
+    expect(api.getSceneElements().slice(0, original.length)).toEqual(original);
+    expect(api.getSceneElements().at(-1)).toMatchObject({
+      type: "freedraw",
+      x: 400,
+      y: 300,
+    });
+    expect(post).toHaveBeenCalledTimes(3);
+  } finally {
+    release();
+  }
+});
+
+it("writes a cloud voice title as editable handwriting directly without a model request", async () => {
+  saveSettings({ ...defaults, apiKey: "configured", speech: "cloud" }, false);
+  const api = sceneAPI();
+  const originalIds = new Set(
+    api.getSceneElements().map((element) => element.id),
+  );
+  const release = registerCanvasCommands(api);
+  const post = vi.spyOn(transport, "postAI");
+  const model = vi.spyOn(ai, "chat");
+  try {
+    await runVoiceAgent("手写标题 Energy", [], new AbortController().signal);
+    expect(api.getSceneElements().length).toBeGreaterThan(0);
+    expect(
+      api
+        .getSceneElements()
+        .filter((element) => !originalIds.has(element.id))
+        .every((element) => element.type === "freedraw"),
+    ).toBe(true);
+    expect(post).not.toHaveBeenCalled();
+    expect(model).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+});
+
+it("opens cloud recording controls without acquiring the microphone", async () => {
+  saveSettings({ ...defaults, speech: "cloud" }, false);
+  const open = vi.fn();
+  const start = vi.fn();
+  const release = [
+    classroomCommands.register("record.open", "Open", open),
+    classroomCommands.register("record.start", "Start", start),
+  ];
+  try {
+    await runVoiceAgent("开始录制", [], new AbortController().signal);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(start).not.toHaveBeenCalled();
+  } finally {
+    release.forEach((stop) => stop());
+  }
+});
+
+it("routes a concrete cloud function request to the existing graph command without a planning model", async () => {
+  saveSettings({ ...defaults, speech: "cloud", apiKey: "" }, false);
+  const plot = vi.fn();
+  const release = classroomCommands.register("math.plot", "Insert graph", plot);
+  const post = vi.spyOn(transport, "postAI");
+  try {
+    const signal = new AbortController().signal;
+    await runVoiceAgent("画 y=x 的函数图像", [], signal);
+    expect(plot).toHaveBeenCalledWith({
+      expression: "x",
+      surface: false,
+      signal,
+    });
+    expect(post).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+});
+
+it("rejects a write request answered only by voice_answer or completion text", async () => {
+  saveSettings({ ...defaults, apiKey: "configured", speech: "cloud" }, false);
+  const api = sceneAPI();
+  const original = api.getSceneElements();
+  const release = registerCanvasCommands(api);
+  const response = (id: string, output: unknown[]) => ({
+    status: 200,
+    stream: false,
+    data: JSON.stringify({ id, status: "completed", output }),
+  });
+  const post = vi
+    .spyOn(transport, "postAI")
+    .mockResolvedValueOnce(
+      response("claimed", [
+        {
+          type: "function_call",
+          name: "voice_answer",
+          call_id: "fake",
+          arguments: JSON.stringify({ text: "已经画好了" }),
+        },
+      ]),
+    )
+    .mockResolvedValue(
+      response("claimed-again", [
+        {
+          type: "message",
+          content: [{ type: "output_text", text: "已经画好了" }],
+        },
+      ]),
+    );
+  try {
+    const preview = vi.fn();
+    const signal = new AbortController().signal;
+    await expect(
+      runVoiceAgent("手绘电路图", [], signal, signal, preview),
+    ).rejects.toThrow();
+    expect(
+      (post.mock.calls[0][2].tools as { name: string }[]).some(
+        (tool) => tool.name === "voice_answer",
+      ),
+    ).toBe(false);
+    expect(preview).not.toHaveBeenCalled();
+    expect(api.getSceneElements()).toBe(original);
   } finally {
     release();
   }

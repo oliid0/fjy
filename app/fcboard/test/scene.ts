@@ -32,7 +32,11 @@ export const sceneAPI = () => {
     { type: "text", text: "学生的题目", x: 10, y: 10 },
   ]);
   const api = {
-    getSceneElements: () => scene,
+    getSceneElements: () =>
+      scene.some((element) => element.isDeleted)
+        ? scene.filter((element) => !element.isDeleted)
+        : scene,
+    getSceneElementsIncludingDeleted: () => scene,
     getAppState: () => ({
       scrollX: 0,
       scrollY: 0,

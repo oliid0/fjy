@@ -39,14 +39,6 @@ const quiz = (): Quiz => ({
   sources: [{ title: "教材", url: "https://www.moe.gov.cn/" }],
 });
 
-const plan = (count: number, type: "single" | "short" = "single") => ({
-  title: "函数测验",
-  tasks: Array.from({ length: count }, (_, index) => ({
-    type,
-    focus: `独立知识点 ${index + 1}`,
-  })),
-  sources: quiz().sources,
-});
 const candidate = (index: number) => ({
   ...quiz().questions[0],
   question: `独立题目 ${index + 1}`,
@@ -66,18 +58,16 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-it("plans with actual research, then retries only the independent question with the wrong type", async () => {
+it("starts questions immediately with the chosen model and reports an invalid type without another model request", async () => {
   saveSettings(
     { ...defaults, apiKey: "test", textModel: "chosen-model" },
     false,
   );
   const chat = vi
     .spyOn(ai, "chat")
-    .mockResolvedValueOnce(JSON.stringify(plan(1)))
-    .mockResolvedValueOnce(
+    .mockResolvedValue(
       JSON.stringify({ ...candidate(0), type: "calculation" }),
-    )
-    .mockResolvedValueOnce(JSON.stringify(candidate(0)));
+    );
   const progress = vi.fn();
   const result = await generateQuiz(
     "出1道题",
@@ -87,13 +77,12 @@ it("plans with actual research, then retries only the independent question with 
     "single",
     progress,
   );
-  expect(result.questions[0].type).toBe("single");
-  expect(chat.mock.calls[0][3]).toMatchObject({ webSearch: true });
-  expect(chat.mock.calls[1][2]).toMatchObject({ model: "chosen-model" });
-  expect(String(chat.mock.calls[1][0][0].content)).toContain(
-    'Every question must use type "single"',
-  );
-  expect(String(chat.mock.calls[2][0].at(-1)!.content)).toContain(
+  expect(chat).toHaveBeenCalledTimes(1);
+  expect(chat.mock.calls[0][3]).toMatchObject({ quickVision: true });
+  expect(chat.mock.calls[0][3]?.webSearch).toBeUndefined();
+  expect(chat.mock.calls[0][2]).toMatchObject({ model: "chosen-model" });
+  expect(result.questions).toEqual([]);
+  expect(result.errors![0]).toContain(
     t("fcboard.quizForm.typeMismatch", {
       type: t("fcboard.aiMessages.quizType_single"),
     }),
@@ -111,14 +100,12 @@ it.each([
   ["根据第一道题出二十道选择题", 20],
   ["出两道数学题", 2],
 ])(
-  "schedules the exact Chinese count with real source/vision context: %s",
+  "schedules the exact Chinese count immediately with the complete vision context: %s",
   async (prompt, count) => {
     const chat = vi
       .spyOn(ai, "chat")
-      .mockImplementation(async (messages, _signal, _settings, options) =>
-        JSON.stringify(
-          options?.webSearch ? plan(count) : candidate(taskIndex(messages)),
-        ),
+      .mockImplementation(async (messages) =>
+        JSON.stringify(candidate(taskIndex(messages))),
       );
     const result = await generateQuiz(
       prompt,
@@ -127,9 +114,9 @@ it.each([
       "data:image/png;base64,actual-board",
     );
     expect(result.questions).toHaveLength(count);
-    expect(chat).toHaveBeenCalledTimes(count + 1);
-    expect(chat.mock.calls[0][0][0].content).toContain(`Plan exactly ${count}`);
-    expect(JSON.stringify(chat.mock.calls[1][0][1].content)).toContain(
+    expect(chat).toHaveBeenCalledTimes(count);
+    expect(chat.mock.calls[0][3]?.webSearch).toBeUndefined();
+    expect(JSON.stringify(chat.mock.calls[0][0][1].content)).toContain(
       "data:image/png;base64,actual-board",
     );
   },
@@ -151,26 +138,21 @@ it("limits real independent question work to ten and publishes completion order 
   const request = new AbortController();
   let running = 0;
   let maximum = 0;
-  vi.spyOn(ai, "chat").mockImplementation(
-    async (messages, signal, _settings, options) => {
-      if (options?.webSearch) {
-        return JSON.stringify(plan(12));
-      }
-      const index = taskIndex(messages);
-      running++;
-      maximum = Math.max(maximum, running);
-      try {
-        return await new Promise<string>((resolve, reject) => {
-          pending.set(index, resolve);
-          signal?.addEventListener("abort", () => reject(signal.reason), {
-            once: true,
-          });
+  vi.spyOn(ai, "chat").mockImplementation(async (messages, signal) => {
+    const index = taskIndex(messages);
+    running++;
+    maximum = Math.max(maximum, running);
+    try {
+      return await new Promise<string>((resolve, reject) => {
+        pending.set(index, resolve);
+        signal?.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
         });
-      } finally {
-        running--;
-      }
-    },
-  );
+      });
+    } finally {
+      running--;
+    }
+  });
   const progress = vi.fn();
   const job = generateQuiz(
     "出12道题",
@@ -205,7 +187,7 @@ it("limits real independent question work to ten and publishes completion order 
   }
 });
 
-it("publishes all text while an independent image is slow, then verifies only that actual picture", async () => {
+it("publishes all text while an independent image is slow and publishes its result without AI review", async () => {
   let finish!: (
     image: Awaited<ReturnType<typeof images.generateImage>>,
   ) => void;
@@ -215,30 +197,22 @@ it("publishes all text while an independent image is slow, then verifies only th
         finish = resolve;
       }),
   );
-  const chat = vi
-    .spyOn(ai, "chat")
-    .mockImplementation(async (messages, _signal, _settings, options) => {
-      if (options?.webSearch) {
-        return JSON.stringify(plan(2));
-      }
-      if (String(messages[0].content).startsWith("Check an actual")) {
-        return JSON.stringify({ valid: true, issues: "" });
-      }
-      const index = taskIndex(messages);
-      return JSON.stringify({
-        ...candidate(index),
-        ...(index === 0
-          ? {
-              question: "如图，两个苹果各重多少？",
-              needsImage: true,
-              imageMethod: "generate",
-              imagePrompt:
-                "Exactly two apples, total weight 200g; label total only",
-              imageCaption: "两个苹果共重200g",
-            }
-          : {}),
-      });
+  const chat = vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
+    const index = taskIndex(messages);
+    return JSON.stringify({
+      ...candidate(index),
+      ...(index === 0
+        ? {
+            question: "如图，两个苹果各重多少？",
+            needsImage: true,
+            imageMethod: "generate",
+            imagePrompt:
+              "Exactly two apples, total weight 200g; label total only",
+            imageCaption: "两个苹果共重200g",
+          }
+        : {}),
     });
+  });
   const progress = vi.fn();
   const job = generateQuiz(
     "出2道题",
@@ -264,9 +238,7 @@ it("publishes all text while an independent image is slow, then verifies only th
     status: "ready",
     dataURL: "data:image/png;base64,aGVsbG8=" as DataURL,
   });
-  expect(JSON.stringify(chat.mock.calls.at(-1)![0])).toContain(
-    "data:image/png;base64,aGVsbG8=",
-  );
+  expect(chat).toHaveBeenCalledTimes(2);
   expect(image.mock.calls[0][0]).toContain("Exactly two apples");
 });
 
@@ -275,38 +247,33 @@ it("isolates an invalid question and a failed illustration without dropping the 
   vi.spyOn(images, "generateImage").mockRejectedValue(
     new Error("image quota exceeded"),
   );
-  vi.spyOn(ai, "chat").mockImplementation(
-    async (messages, _signal, _settings, options) => {
-      if (options?.webSearch) {
-        return JSON.stringify(plan(3));
-      }
-      const index = taskIndex(messages);
-      attempts.set(index, (attempts.get(index) || 0) + 1);
-      if (index === 0) {
-        return JSON.stringify({
-          ...candidate(index),
-          question: "如图，求苹果数量。",
-          needsImage: false,
-        });
-      }
+  vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
+    const index = taskIndex(messages);
+    attempts.set(index, (attempts.get(index) || 0) + 1);
+    if (index === 0) {
       return JSON.stringify({
         ...candidate(index),
-        ...(index === 1
-          ? {
-              needsImage: true,
-              imageMethod: "generate",
-              imagePrompt: "one apple",
-              imageCaption: "一个苹果",
-            }
-          : {}),
+        question: "如图，求苹果数量。",
+        needsImage: false,
       });
-    },
-  );
+    }
+    return JSON.stringify({
+      ...candidate(index),
+      ...(index === 1
+        ? {
+            needsImage: true,
+            imageMethod: "generate",
+            imagePrompt: "one apple",
+            imageCaption: "一个苹果",
+          }
+        : {}),
+    });
+  });
   const result = await generateQuiz("出3道题", new AbortController().signal);
   expect(result.questions).toHaveLength(2);
   expect(result.errors).toHaveLength(1);
   expect(result.errors![0]).toContain(t("fcboard.quizForm.imageSpecification"));
-  expect(attempts.get(0)).toBe(2);
+  expect(attempts.get(0)).toBe(1);
   expect(result.questions.find((q) => q.image)?.image).toMatchObject({
     status: "error",
     error: "image quota exceeded",
@@ -314,7 +281,7 @@ it("isolates an invalid question and a failed illustration without dropping the 
   expect(result.generating).toBe(false);
 });
 
-it("publishes complete questions and answers before a Vega figure and retains them when both figure attempts fail", async () => {
+it("publishes complete questions and answers before a Vega figure and retains them when its single render fails", async () => {
   let rejectDrawing!: (error: Error) => void;
   const renderer = vi
     .spyOn(graphics, "renderQuizGraphic")
@@ -326,51 +293,45 @@ it("publishes complete questions and answers before a Vega figure and retains th
     )
     .mockRejectedValue(new Error("diagram render failed"));
   const imageProvider = vi.spyOn(images, "generateImage");
-  vi.spyOn(ai, "chat").mockImplementation(
-    async (messages, _signal, _settings, options) => {
-      if (options?.webSearch) {
-        return JSON.stringify(plan(2));
-      }
-      if (String(messages[0].content).startsWith("Create only the accurate")) {
-        return JSON.stringify({
-          title: "Fruit counts",
-          mode: "vega-lite",
-          spec: {
-            data: {
-              values: [
-                { fruit: "Apples", count: 2 },
-                { fruit: "Pears", count: 3 },
-              ],
-            },
-            mark: "bar",
-            width: 240,
-            height: 180,
-            encoding: {
-              x: { field: "fruit", type: "nominal" },
-              y: { field: "count", type: "quantitative" },
-            },
-          },
-        });
-      }
-      const index = taskIndex(messages);
+  vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
+    if (String(messages[0].content).startsWith("Create only the accurate")) {
       return JSON.stringify({
-        ...candidate(index),
-        ...(index === 0
-          ? {
-              question: "如图，苹果和梨共多少个？",
-              options: ["2", "3", "5", "6"],
-              answer: ["C"],
-              explanation: "2+3=5。",
-              needsImage: true,
-              imageMethod: "draw",
-              imagePrompt:
-                "Apples=2, Pears=3; labeled counts, do not show total",
-              imageCaption: "水果数量",
-            }
-          : {}),
+        title: "Fruit counts",
+        mode: "vega-lite",
+        spec: {
+          data: {
+            values: [
+              { fruit: "Apples", count: 2 },
+              { fruit: "Pears", count: 3 },
+            ],
+          },
+          mark: "bar",
+          width: 240,
+          height: 180,
+          encoding: {
+            x: { field: "fruit", type: "nominal" },
+            y: { field: "count", type: "quantitative" },
+          },
+        },
       });
-    },
-  );
+    }
+    const index = taskIndex(messages);
+    return JSON.stringify({
+      ...candidate(index),
+      ...(index === 0
+        ? {
+            question: "如图，苹果和梨共多少个？",
+            options: ["2", "3", "5", "6"],
+            answer: ["C"],
+            explanation: "2+3=5。",
+            needsImage: true,
+            imageMethod: "draw",
+            imagePrompt: "Apples=2, Pears=3; labeled counts, do not show total",
+            imageCaption: "水果数量",
+          }
+        : {}),
+    });
+  });
   const progress = vi.fn();
   const job = generateQuiz(
     "使用 Vega 出2道题",
@@ -403,11 +364,11 @@ it("publishes complete questions and answers before a Vega figure and retains th
   });
   expect(result.errors).toEqual([]);
   expect(result.generating).toBe(false);
-  expect(renderer).toHaveBeenCalledTimes(2);
+  expect(renderer).toHaveBeenCalledTimes(1);
   expect(imageProvider).not.toHaveBeenCalled();
 });
 
-it("rejects truncated counts, duplicate questions, invalid choice keys and missing sources", () => {
+it("rejects truncated counts, duplicate questions, invalid choice keys while allowing an original quiz without invented sources", () => {
   expect(() => validateQuiz(quiz(), 10)).toThrow();
   const duplicate = quiz();
   duplicate.questions.push(duplicate.questions[0]);
@@ -415,7 +376,8 @@ it("rejects truncated counts, duplicate questions, invalid choice keys and missi
   const wrong = quiz();
   wrong.questions[0].answer = ["Z"];
   expect(() => validateQuiz(wrong)).toThrow();
-  expect(() => validateQuiz({ ...quiz(), sources: [] })).toThrow();
+  expect(validateQuiz({ ...quiz(), sources: [] }).sources).toEqual([]);
+  expect(() => validateQuiz({ ...quiz(), sources: undefined })).toThrow();
 });
 it("creates an isolated single-card-per-question document with distinct response controls and escaped model text", () => {
   const value = quiz();

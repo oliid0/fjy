@@ -18,7 +18,7 @@ const tap = (target: Element) => {
   fireEvent.click(target);
 };
 
-it("toggles the pen menu with real pointer-down taps and offers all twelve pens together", async () => {
+it("swipes between pen pages, switches with the dots and reopens on the selected pen", async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   act(() => h.app.setActiveTool({ type: "freedraw" }));
   const pen = screen.getByRole("button", { name: t("fcboard.pen") });
@@ -26,10 +26,49 @@ it("toggles the pen menu with real pointer-down taps and offers all twelve pens 
   let dialog = screen.getByRole("dialog", {
     name: t("fcboard.pen_and_object_properties"),
   });
-  const penTypes = within(dialog).getAllByRole("group", {
+  const penTypes = within(dialog).getByRole("group", {
     name: t("fcboard.pen_type"),
-  })[0];
-  expect(within(penTypes).getAllByRole("button")).toHaveLength(12);
+  });
+  const basic = within(dialog).getByRole("button", {
+    name: t("fcboard.page_page", { page: 1 }),
+  });
+  const functional = within(dialog).getByRole("button", {
+    name: t("fcboard.page_page", { page: 2 }),
+  });
+  const swipe = (from: number, to: number) => {
+    const event = {
+      pointerType: "touch",
+      pointerId: 2,
+      button: 0,
+      clientY: 20,
+    };
+    fireEvent.pointerDown(penTypes, { ...event, clientX: from });
+    fireEvent.pointerMove(penTypes, { ...event, clientX: to });
+    fireEvent.pointerUp(penTypes, { ...event, clientX: to });
+  };
+  expect(basic).toHaveAttribute("aria-pressed", "true");
+  expect(within(penTypes).getAllByRole("button")).toHaveLength(6);
+  swipe(100, 30);
+  expect(functional).toHaveAttribute("aria-pressed", "true");
+  expect(
+    within(penTypes)
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label")),
+  ).toEqual(
+    (
+      [
+        "magic_pen",
+        "shape_pen",
+        "text_pen",
+        "function_pen",
+        "calculation_pen",
+        "language_pen",
+      ] as const
+    ).map((name) => t(`fcboard.${name}`)),
+  );
+  swipe(30, 100);
+  expect(basic).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(functional);
   expect(
     within(dialog).queryByRole("button", {
       name: t("fcboard.calculation_pen"),
@@ -45,6 +84,11 @@ it("toggles the pen menu with real pointer-down taps and offers all twelve pens 
   dialog = screen.getByRole("dialog", {
     name: t("fcboard.pen_and_object_properties"),
   });
+  fireEvent.click(
+    within(dialog).getByRole("button", {
+      name: t("fcboard.page_page", { page: 2 }),
+    }),
+  );
   fireEvent.click(
     within(dialog).getByRole("button", { name: t("fcboard.calculation_pen") }),
   );

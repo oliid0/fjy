@@ -41,6 +41,7 @@ public class DuplexSpeechPlugin extends Plugin {
     private static final class Session {
         final String id;
         final boolean visual;
+        volatile boolean replyAllowed;
         final CountDownLatch ready = new CountDownLatch(1);
         volatile boolean closed;
         volatile String error;
@@ -143,11 +144,15 @@ public class DuplexSpeechPlugin extends Plugin {
                             if (text.length() > 2 * 1024 * 1024) throw new IOException("Live speech response is too large");
                             JSONObject event = new JSONObject(text);
                             String type = event.optString("type");
+                            if ("conversation.item.input_audio_transcription.started".equals(type) ||
+                                "response.done".equals(type) || "response.canceled".equals(type)) {
+                                session.replyAllowed = false;
+                            }
                             if (session.audio != null) {
                                 if ((!session.visual && "conversation.item.input_audio_transcription.started".equals(type)) ||
                                     "response.canceled".equals(type)) session.audio.interrupt();
                                 if ("response.output_audio.delta".equals(type)) {
-                                    session.audio.play(Base64.decode(event.optString("audio", event.optString("delta", "")), Base64.DEFAULT));
+                                    if (session.replyAllowed) session.audio.play(Base64.decode(event.optString("audio", event.optString("delta", "")), Base64.DEFAULT));
                                     return; // PCM is consumed natively; do not duplicate base64 traffic through WebView.
                                 }
                             }
@@ -243,6 +248,9 @@ public class DuplexSpeechPlugin extends Plugin {
     }
     private void send(Session session, JSONObject event) throws IOException {
         if (session != active || session.closed || session.error != null) throw new IOException("The live speech session ended");
+        String type = event.optString("type");
+        if ("response.cancel".equals(type)) session.replyAllowed = false;
+        if ("speech_text_buffer.replacement.commit".equals(type)) session.replyAllowed = true;
         if (session.socket.queueSize() > 320000 || !session.socket.send(event.toString())) throw new IOException("Live speech upload is too slow");
     }
     /** One 100 ms bridge transfer, then the documented 640-byte frames paced at 20 ms.

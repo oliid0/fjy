@@ -73,63 +73,6 @@ const question = (): QuizQuestion => ({
   },
 });
 
-it("retries a semantically wrong picture using actual visual feedback before publishing the corrected image", async () => {
-  const generate = vi
-    .spyOn(images, "generateImage")
-    .mockResolvedValueOnce({
-      dataURL: "data:image/png;base64,d3Jvbmc=" as DataURL,
-      mimeType: "image/png",
-      width: 100,
-      height: 100,
-    })
-    .mockResolvedValueOnce({
-      dataURL: "data:image/png;base64,Y29ycmVjdA==" as DataURL,
-      mimeType: "image/png",
-      width: 100,
-      height: 100,
-    });
-  const chat = vi
-    .spyOn(ai, "chat")
-    .mockResolvedValueOnce(
-      JSON.stringify({
-        valid: false,
-        issues: "The picture has three apples; it must have exactly two.",
-      }),
-    )
-    .mockResolvedValueOnce(JSON.stringify({ valid: true, issues: "" }));
-  const result = await generateQuizImage(
-    question(),
-    new AbortController().signal,
-  );
-  expect(result).toBe("data:image/png;base64,Y29ycmVjdA==");
-  expect(generate.mock.calls[1][0]).toContain("The picture has three apples");
-  expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
-    "data:image/png;base64,d3Jvbmc=",
-  );
-  expect(JSON.stringify(chat.mock.calls[1][0])).toContain(
-    "data:image/png;base64,Y29ycmVjdA==",
-  );
-});
-
-it("never publishes a second inconsistent picture or retries indefinitely", async () => {
-  const generate = vi.spyOn(images, "generateImage").mockResolvedValue({
-    dataURL: "data:image/png;base64,d3Jvbmc=" as DataURL,
-    mimeType: "image/png",
-    width: 100,
-    height: 100,
-  });
-  vi.spyOn(ai, "chat").mockResolvedValue(
-    JSON.stringify({
-      valid: false,
-      issues: "Missing the required total weight label.",
-    }),
-  );
-  await expect(
-    generateQuizImage(question(), new AbortController().signal),
-  ).rejects.toThrow("Missing the required total weight label.");
-  expect(generate).toHaveBeenCalledTimes(2);
-});
-
 const triangle = (title = "Triangle") =>
   JSON.stringify({
     title,
@@ -155,65 +98,65 @@ const drawing = (): QuizQuestion => ({
   },
 });
 
-it("renders the requested engine resource and visually retries its actual pixels without image API or library persistence", async () => {
+it("publishes the first generated image with one image request and no AI review", async () => {
+  const generate = vi.spyOn(images, "generateImage").mockResolvedValue({
+    dataURL: "data:image/png;base64,YWJj" as DataURL,
+    mimeType: "image/png",
+    width: 100,
+    height: 100,
+  });
+  const chat = vi.spyOn(ai, "chat");
+  expect(
+    await generateQuizImage(question(), new AbortController().signal),
+  ).toBe("data:image/png;base64,YWJj");
+  expect(generate).toHaveBeenCalledTimes(1);
+  expect(generate.mock.calls[0][0]).toContain("Exactly two apples");
+  expect(chat).not.toHaveBeenCalled();
+});
+
+it("reports an image failure immediately without automatic generation or review retries", async () => {
+  const generate = vi
+    .spyOn(images, "generateImage")
+    .mockRejectedValue(new Error("quota exceeded"));
+  const chat = vi.spyOn(ai, "chat");
+  await expect(
+    generateQuizImage(question(), new AbortController().signal),
+  ).rejects.toThrow("quota exceeded");
+  expect(generate).toHaveBeenCalledTimes(1);
+  expect(chat).not.toHaveBeenCalled();
+});
+
+it("renders the requested engine once without image review or library persistence", async () => {
   const before = await generatedResources();
   const provider = vi.spyOn(images, "generateImage");
   const render = vi
     .spyOn(graphics, "renderQuizGraphic")
-    .mockResolvedValueOnce("data:image/png;base64,Zmlyc3Q=")
-    .mockResolvedValueOnce("data:image/png;base64,c2Vjb25k");
-  const chat = vi
-    .spyOn(ai, "chat")
-    .mockResolvedValueOnce(triangle())
-    .mockResolvedValueOnce(
-      JSON.stringify({
-        valid: false,
-        issues: "The BC label is missing its 4 cm value.",
-      }),
-    )
-    .mockResolvedValueOnce(triangle())
-    .mockResolvedValueOnce(JSON.stringify({ valid: true, issues: "" }));
+    .mockResolvedValue("data:image/png;base64,Zmlyc3Q=");
+  const chat = vi.spyOn(ai, "chat").mockResolvedValue(triangle());
   expect(await generateQuizImage(drawing(), new AbortController().signal)).toBe(
-    "data:image/png;base64,c2Vjb25k",
-  );
-  expect(render).toHaveBeenCalledTimes(2);
-  expect(render.mock.calls[0][0].libraries).toEqual(["jsxgraph"]);
-  expect(render.mock.calls[0][0].html).toContain("create('polygon'");
-  expect(String(chat.mock.calls[2][0][1].content)).toContain(
-    "BC label is missing",
-  );
-  expect(JSON.stringify(chat.mock.calls[1][0])).toContain(
     "data:image/png;base64,Zmlyc3Q=",
   );
-  expect(JSON.stringify(chat.mock.calls[3][0])).toContain(
-    "data:image/png;base64,c2Vjb25k",
-  );
+  expect(render).toHaveBeenCalledTimes(1);
+  expect(chat).toHaveBeenCalledTimes(1);
+  expect(render.mock.calls[0][0].libraries).toEqual(["jsxgraph"]);
   expect(provider).not.toHaveBeenCalled();
   expect(await generatedResources()).toEqual(before);
 });
 
-it("repairs a missing explicitly requested engine instead of silently substituting a plain image", async () => {
+it("reports a missing requested engine without substituting or automatically regenerating the figure", async () => {
   const provider = vi.spyOn(images, "generateImage");
-  const render = vi
-    .spyOn(graphics, "renderQuizGraphic")
-    .mockResolvedValue("data:image/png;base64,YWJj");
-  const chat = vi
-    .spyOn(ai, "chat")
-    .mockResolvedValueOnce(
-      JSON.stringify({
-        title: "No engine",
-        html: '<svg><text>AB 3cm</text><path d="M0 0h20"/></svg>',
-      }),
-    )
-    .mockResolvedValueOnce(triangle())
-    .mockResolvedValueOnce(JSON.stringify({ valid: true, issues: "" }));
-  expect(await generateQuizImage(drawing(), new AbortController().signal)).toBe(
-    "data:image/png;base64,YWJj",
+  const render = vi.spyOn(graphics, "renderQuizGraphic");
+  const chat = vi.spyOn(ai, "chat").mockResolvedValue(
+    JSON.stringify({
+      title: "No engine",
+      html: '<svg><text>AB 3cm</text><path d="M0 0h20"/></svg>',
+    }),
   );
-  expect(render).toHaveBeenCalledTimes(1);
-  expect(String(chat.mock.calls[1][0][1].content)).toContain(
-    "explicitly requested engine choices",
-  );
+  await expect(
+    generateQuizImage(drawing(), new AbortController().signal),
+  ).rejects.toThrow();
+  expect(chat).toHaveBeenCalledTimes(1);
+  expect(render).not.toHaveBeenCalled();
   expect(provider).not.toHaveBeenCalled();
 });
 
@@ -227,11 +170,11 @@ it("finishes another program figure while an independent figure is still drawing
         })
       : Promise.resolve("data:image/png;base64,ZmFzdA=="),
   );
-  vi.spyOn(ai, "chat").mockImplementation(async (messages) =>
-    String(messages[0].content).startsWith("Check an actual")
-      ? JSON.stringify({ valid: true, issues: "" })
-      : triangle(JSON.parse(String(messages[1].content)).caption),
-  );
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockImplementation(async (messages) =>
+      triangle(JSON.parse(String(messages[1].content)).caption),
+    );
   const first = drawing();
   first.image!.caption = "slow";
   const second = drawing();
@@ -247,6 +190,7 @@ it("finishes another program figure while an independent figure is still drawing
       "data:image/png;base64,ZmFzdA==",
     );
     expect(slowFinished).toBe(false);
+    expect(chat).toHaveBeenCalledTimes(2);
   } finally {
     release("data:image/png;base64,c2xvdw==");
     await slow;

@@ -22,6 +22,7 @@ import { handwritingText } from "./handwriting";
 import type { AIResponseLanguage } from "./aiLocale";
 
 import type { Settings } from "./settings";
+import type { ContentRect } from "./placement";
 
 type Content =
   | string
@@ -237,10 +238,15 @@ export const boardContext = async (
   api: FcboardImperativeAPI,
   wholeBoard = false,
   snapshot?: readonly FcboardElement[],
-  region?: { left: number; top: number; right: number; bottom: number },
+  region?: ContentRect,
   captureImage = true,
   background = true,
-) => {
+): Promise<{
+  elements: readonly FcboardElement[];
+  text: string;
+  image?: string;
+  imageViewport?: ContentRect;
+}> => {
   const all = api.getSceneElements();
   const selected = selectedBoardElements(api);
   const elements =
@@ -303,7 +309,18 @@ export const boardContext = async (
             output.height,
           );
         }
-        return { elements, text, image: output.toDataURL("image/png") };
+        const imageViewport = {
+          left: left / state.zoom.value - state.scrollX,
+          top: top / state.zoom.value - state.scrollY,
+          right: right / state.zoom.value - state.scrollX,
+          bottom: bottom / state.zoom.value - state.scrollY,
+        };
+        return {
+          elements,
+          text,
+          image: output.toDataURL("image/png"),
+          imageViewport,
+        };
       }
     }
   }

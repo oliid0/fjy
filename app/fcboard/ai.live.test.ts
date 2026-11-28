@@ -13,10 +13,11 @@ import { sceneAPI } from "./test/scene";
 import { registerCanvasCommands } from "./canvasCommands";
 import { registerBoardAgents } from "./boardAgents";
 import { agentResponsesEndpoint, runResponsesAgent } from "./responsesAgent";
-import { classroomCommands } from "./commands";
+import { classroomCommands, executeBoardCommand } from "./commands";
 import { runVoiceAgent } from "./voiceAgent";
 
 import type { BoardTask } from "./boardAgents";
+import type { Command } from "./commands";
 
 /** Opt-in only: never sends requests during ordinary tests or without a supplied key. */
 const live = process.env.FCBOARD_LIVE === "1" && !!process.env.hs_apikey;
@@ -107,12 +108,17 @@ it.runIf(live)(
     const started = Date.now();
     const api = sceneAPI();
     const stop = registerCanvasCommands(api);
+    const calls: Command[] = [];
     try {
       const result = await runResponsesAgent({
         endpoint: agentResponsesEndpoint(settings().endpoint)!,
         settings: settings(),
         signal: new AbortController().signal,
         current: () => true,
+        dispatch: (command, signal) => {
+          calls.push(command);
+          return executeBoardCommand(command, signal);
+        },
         allowed: (name) => name === "canvas.ink",
         messages: [
           {
@@ -141,12 +147,39 @@ it.runIf(live)(
         ],
       });
       expect(result.summary.trim()).not.toBe("");
+      await runResponsesAgent({
+        endpoint: agentResponsesEndpoint(settings().endpoint)!,
+        settings: settings(),
+        signal: new AbortController().signal,
+        current: () => true,
+        dispatch: (command, signal) => {
+          calls.push(command);
+          return executeBoardCommand(command, signal);
+        },
+        allowed: (name) => name === "canvas.erase",
+        messages: [
+          {
+            role: "user",
+            content:
+              "调用 board_erase，只擦掉刚才折线在 (415,270)、(445,270)、(445,295)、(415,295) 围成的区域内的部分。四点是白板实际场景坐标。保留区域外的两侧，使用 region，不传 ids。",
+          },
+        ],
+      });
+      const remaining = api.getSceneElements();
+      expect(
+        remaining.filter((element) => element.type === "freedraw"),
+      ).toHaveLength(2);
+      expect(
+        remaining.filter((element) => element.type === "text"),
+      ).toHaveLength(1);
       reports.responsesAgent = {
         success: true,
         elapsedMs: Date.now() - started,
         strokes: ink.length,
+        remainingFragments: 2,
       };
     } finally {
+      reports.responsesInkCalls = calls;
       stop();
     }
   },

@@ -4,17 +4,27 @@ import {
   CaptureUpdateAction,
   convertToFcboardElements,
 } from "@fcboard/fcboard";
-import { getCommonBounds, newIframeElement } from "@fcboard/element";
+import {
+  getCommonBounds,
+  newElementWith,
+  newIframeElement,
+} from "@fcboard/element";
 import {
   calculatorResourceId,
   validateInteractiveResource,
 } from "@fcboard/fcboard/interactiveHtml";
-import { FONT_FAMILY } from "@fcboard/common";
+import { FONT_FAMILY, sceneCoordsToViewportCoords } from "@fcboard/common";
 import { switchWhiteboardPen } from "@fcboard/fcboard/whiteboardPen";
+import { eraseSceneRegion } from "@fcboard/fcboard/eraser/stroke";
+import { pointFrom } from "@fcboard/math";
+
+import type { GlobalPoint } from "@fcboard/math";
 
 import type { ActionName } from "@fcboard/fcboard/actions/types";
 
 import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
+
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { boardContext, selectedBoardElements } from "./ai";
 import {
@@ -26,7 +36,7 @@ import {
   objectSelection,
   styleFunctionPlots,
 } from "./board";
-import { Classroom as NativeClassroom } from "./native";
+import { captureRegion, Classroom as NativeClassroom } from "./native";
 import { insertGeneratedImage } from "./imageGeneration";
 import { documentStrokeBounds } from "./documents";
 import {
@@ -36,9 +46,10 @@ import {
 } from "./canvasTransform";
 import { classroomCommands, commandObjectIds } from "./commands";
 import { LessonCanvas, validateLesson } from "./lesson";
-import { prepareInkWriting, inkStrokeStyle } from "./inkWriting";
+import { inkRegion, inkStrokeStyle, prepareInkWriting } from "./inkWriting";
 import { handwritingText } from "./handwriting";
 import { resourcePlacement } from "./resourcePlacement";
+import { shrinkBoardErasure } from "./insertionWritingTables";
 import { registerResourceCommands } from "./resourceControls";
 import { registerLanguageCommands } from "./languageCommands";
 import { inkAssistMode } from "./inkRecognition";
@@ -111,6 +122,20 @@ export const registerCanvasCommands = (
 ) => {
   const animations = new Set<LessonCanvas>();
   const configurations = new Set<AbortController>();
+  const erase = (
+    before: readonly FcboardElement[],
+    next: readonly FcboardElement[],
+  ) =>
+    api.updateScene({
+      elements: shrinkBoardErasure(before, next),
+      appState: {
+        selectedElementIds: {},
+        selectedGroupIds: {},
+        whiteboardSelection: undefined,
+        selectedLinearElement: null,
+      },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
   const inspect = () => {
     const document = classroomCommands.read("document") as
       | {
@@ -168,6 +193,7 @@ export const registerCanvasCommands = (
             bounds: [bounds.left, bounds.top, bounds.right, bounds.bottom],
             text: stroke.resource?.title || stroke.text,
             interactive: stroke.resource ? true : undefined,
+            locked: stroke.locked,
             color: stroke.color,
             width: stroke.width,
             fontSize: stroke.fontSize,
@@ -219,6 +245,8 @@ export const registerCanvasCommands = (
             : element.customData?.fcWrittenText ||
               element.customData?.fcInteractiveResource?.title,
         color: element.strokeColor,
+        groupIds: element.groupIds.length ? element.groupIds : undefined,
+        locked: element.locked || undefined,
         writtenGroup: element.customData?.fcWrittenGroup,
         fontSize: element.type === "text" ? element.fontSize : undefined,
         fontFamily: element.type === "text" ? element.fontFamily : undefined,
@@ -239,7 +267,7 @@ export const registerCanvasCommands = (
       if (classroomCommands.has("document.snapshot")) {
         const snapshot = await classroomCommands.execute({
           name: "document.snapshot",
-          args: { capture: args.capture !== false },
+          args: { capture: args.capture !== false, screen: args.screen },
         });
         signal?.throwIfAborted();
         return snapshot;
@@ -248,20 +276,50 @@ export const registerCanvasCommands = (
       const capture = args.capture !== false;
       const nativeScreen =
         capture && args.screen === true && Capacitor.isNativePlatform();
+      const state = api.getAppState();
+      const viewport = contentViewport(api);
       const snapshot = await boardContext(
         api,
         !ids.length,
         ids.length
           ? api.getSceneElements().filter((element) => ids.includes(element.id))
           : undefined,
-        contentViewport(api),
+        viewport,
         capture && !nativeScreen,
       );
       signal?.throwIfAborted();
       if (nativeScreen) {
-        const { image } = await NativeClassroom.captureFrame();
+        const start = sceneCoordsToViewportCoords(
+          { sceneX: viewport.left, sceneY: viewport.top },
+          state,
+        );
+        const end = sceneCoordsToViewportCoords(
+          { sceneX: viewport.right, sceneY: viewport.bottom },
+          state,
+        );
+        const region =
+          start.x >= 0 &&
+          start.y >= 0 &&
+          end.x <= innerWidth &&
+          end.y <= innerHeight
+            ? captureRegion({
+                left: start.x,
+                top: start.y,
+                right: end.x,
+                bottom: end.y,
+              })
+            : undefined;
+        const { image } = await NativeClassroom.captureFrame(
+          region ? { region } : undefined,
+        );
         signal?.throwIfAborted();
-        return { ...snapshot, image };
+        const sameViewport =
+          JSON.stringify(viewport) === JSON.stringify(contentViewport(api));
+        return {
+          ...snapshot,
+          image,
+          ...(region && sameViewport ? { imageViewport: viewport } : {}),
+        };
       }
       return snapshot;
     }),
@@ -616,7 +674,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.ink",
-      "Insert editable ink on the visible surface. args.strokes contains [[x,y],...] trajectories. Optional per-command pen=hard|brush|highlighter|dashed|rainbow, color (hex), width=1..30 and opacity=0..100 use real pen effects without changing the global pen. Optional args.text is dictated text; also supply args.bounds={left,top,right,bottom} to wrap handwriting within that visible area. args.replaceIds atomically replaces the specified source objects. Returns actual object ids.",
+      "Insert editable ink. One path: args.strokes=[[400,300],[430,280],[460,300]]. Multiple paths: wrap each path in an outer array. Inspect the surface first. Use coordinateSpace=scene or omit it for explicit board/document coordinates. Use viewport only for normalized 0..1000 along both visible axes, with revision when available. Optional pen=hard|brush|highlighter|dashed|rainbow, color hex, width=1..30, opacity=0..100. When adding dictated text supply args.text and args.bounds={left,top,right,bottom} in board/document coordinates. replaceIds replaces the actual source objects. Returns object ids.",
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -633,6 +691,13 @@ export const registerCanvasCommands = (
           api.getSceneElements(),
           true,
         );
+        if (
+          api
+            .getSceneElements()
+            .some((element) => replaced.has(element.id) && element.locked)
+        ) {
+          throw new Error(t("fcboard.selection_unlock_first"));
+        }
         const signature = () =>
           JSON.stringify(
             api.getSceneElements().filter((item) => replaced.has(item.id)),
@@ -681,7 +746,13 @@ export const registerCanvasCommands = (
         }
         api.updateScene({
           elements: [
-            ...api.getSceneElements().filter((item) => !replaced.has(item.id)),
+            ...api
+              .getSceneElementsIncludingDeleted()
+              .map((item) =>
+                replaced.has(item.id)
+                  ? newElementWith(item, { isDeleted: true })
+                  : item,
+              ),
             ...elements,
           ],
           ...(args.select === false
@@ -999,21 +1070,54 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.erase",
-      "Erase objects identified by args.ids, or only the current selection when omitted.",
+      "Erase objects by observed args.ids, the current selection when omitted, or the area of args.region (a polygon of [x,y] points). Use coordinateSpace=scene or omit it for explicit coordinates. Use viewport only for normalized 0..1000 points and supply the observed revision when available. Regional erasure keeps outside stroke fragments and locked objects.",
       (args) => {
+        if (args.signal instanceof AbortSignal) {
+          args.signal.throwIfAborted();
+        }
         if (classroomCommands.has("document.erase")) {
           return classroomCommands.execute({ name: "document.erase", args });
+        }
+        const elements = api.getSceneElementsIncludingDeleted();
+        const protectedId = api.getSceneProjection?.()?.elementId;
+        if (args.region !== undefined) {
+          if (args.ids !== undefined) {
+            throw new Error(t("fcboard.invalid_selection_format"));
+          }
+          const region = inkRegion(args, contentViewport(api));
+          const next = eraseSceneRegion(
+            elements,
+            region.map(([x, y]) => pointFrom<GlobalPoint>(x, y)),
+            [],
+            0.125 / api.getAppState().zoom.value,
+            protectedId,
+          );
+          if (next === elements) {
+            throw new Error(t("fcboard.select_an_object_first"));
+          }
+          erase(elements, next);
+          return { changed: true };
         }
         const ids =
           args.ids === undefined
             ? selectedBoardElements(api).map((el) => el.id)
             : args.ids;
-        const selected = commandObjectIds(ids, api.getSceneElements());
-        api.updateScene({
-          elements: api.getSceneElements().filter((el) => !selected.has(el.id)),
-          appState: { selectedElementIds: {}, whiteboardSelection: undefined },
-          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-        });
+        const selected = commandObjectIds(ids, elements);
+        if (
+          elements.some(
+            (el) => selected.has(el.id) && (el.locked || el.id === protectedId),
+          )
+        ) {
+          throw new Error(t("fcboard.selection_unlock_first"));
+        }
+        erase(
+          elements,
+          elements.map((element) =>
+            selected.has(element.id)
+              ? newElementWith(element, { isDeleted: true })
+              : element,
+          ),
+        );
         return { ids: [...selected] };
       },
     ),
@@ -1192,6 +1296,15 @@ export const registerCanvasCommands = (
       },
     ),
     classroomCommands.context("canvas", inspect),
+    classroomCommands.context("canvas.viewport", () =>
+      classroomCommands.has("document.draw")
+        ? (
+            classroomCommands.read("document.layout") as
+              | { viewport?: ContentRect }
+              | undefined
+          )?.viewport
+        : contentViewport(api),
+    ),
     classroomCommands.onInvalidate(() => {
       configurations.forEach((request) => request.abort());
       animations.forEach((animation) => animation.cancel());

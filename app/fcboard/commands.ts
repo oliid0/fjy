@@ -308,10 +308,17 @@ export const verifyBoardCommandResult = (command: Command, result: unknown) => {
         boundary?: string;
         phase?: string;
         error?: Parameters<typeof t>[0];
+        ok?: boolean;
+        state?: string;
       }
     | undefined;
   if (receipt?.cancelled === true) {
     throw new DOMException("Board operation cancelled", "AbortError");
+  }
+  if (receipt?.ok === false || receipt?.state === "failed") {
+    throw new Error(
+      String(receipt.error || t("fcboard.invalid_ai_follow_up_action")),
+    );
   }
   if (
     ["board.step", "document.next", "document.previous"].includes(
@@ -369,6 +376,7 @@ export const commandObjectIds = (
 type VoiceRule = {
   patterns: string[];
   compact: boolean;
+  cloudOnly?: boolean;
   rejectCompound?: boolean;
   command?: Command;
   kind?: string;
@@ -380,6 +388,11 @@ const voiceRules = (voiceVocabulary.rules as VoiceRule[]).map((rule) => ({
 const compoundRequests = voiceVocabulary.compound.map(
   (pattern) => new RegExp(pattern, "i"),
 );
+const operationRequests = voiceVocabulary.operation.map(
+  (pattern) => new RegExp(pattern, "i"),
+);
+export const explicitBoardOperation = (text: string) =>
+  operationRequests.some((pattern) => pattern.test(text.trim()));
 const voiceWord = (word: string) =>
   (voiceVocabulary.words as Record<string, string>)[word.toLowerCase()];
 const voiceNumber = (value: string) =>
@@ -388,17 +401,20 @@ const voiceNumber = (value: string) =>
     : (voiceVocabulary.numbers as Record<string, number>)[value.toLowerCase()];
 
 /** Localized exact labels and unambiguous speech shortcuts share the component routes. */
-export const directCommand = (text: string): Command | null => {
+export const directCommand = (text: string, cloud = false): Command | null => {
   const request = text.trim();
   const compact = request.replace(/[，。！!？?\s]/g, "");
   for (const rule of voiceRules) {
+    if (rule.cloudOnly && !cloud) {
+      continue;
+    }
     const input = rule.compact ? compact : request;
     const match = rule.patterns
       .map((pattern) => input.match(pattern))
       .find(Boolean);
     if (
       !match ||
-      (rule.rejectCompound &&
+      ((rule.rejectCompound || (cloud && rule.kind === "write")) &&
         compoundRequests.some((pattern) => pattern.test(request)))
     ) {
       continue;
@@ -452,6 +468,20 @@ export const directCommand = (text: string): Command | null => {
               : {}),
           },
         };
+      case "timer": {
+        const amount = value ? voiceNumber(value) : undefined;
+        const seconds =
+          amount === undefined
+            ? undefined
+            : amount * (/^(分钟|分|minutes?|mins?)$/i.test(match[2]) ? 60 : 1);
+        if (value && (!seconds || seconds > 359999)) {
+          return null;
+        }
+        return {
+          name: "tools.timer",
+          args: { action: "start", ...(seconds ? { seconds } : {}) },
+        };
+      }
       case "table": {
         const rows = voiceNumber(match[1]);
         const columns = voiceNumber(match[2]);

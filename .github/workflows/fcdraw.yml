@@ -110,8 +110,20 @@ jobs:
         id: android-package
         working-directory: android
         run: |
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          log=$(mktemp)
+          trap 'rm -f "$log"' EXIT
+          for delay in 30 90 0; do
+            if ./gradlew assembleDebug --no-daemon 2>&1 | tee "$log"; then
+              exit 0
+            fi
+            if [ "$delay" -eq 0 ] || ! grep -Eq 'repo\.maven\.apache\.org.*429' "$log"; then
+              exit 1
+            fi
+            echo "Maven Central rate limited dependency resolution. Retrying in ${delay}s."
+            sleep "$delay"
+          done
       - name: Upload Android APK (arm64-v8a)
         uses: actions/upload-artifact@v4
         timeout-minutes: 3

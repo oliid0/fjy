@@ -112,6 +112,38 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+      - name: Upload Android APK (arm64-v8a)
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-arm64-v8a
+          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
+          if-no-files-found: error
+      - name: Upload Android APK (armeabi-v7a)
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-armeabi-v7a
+          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
+          if-no-files-found: error
+      - name: Upload Android APK (x86)
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-x86
+          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
+          if-no-files-found: error
+      - name: Upload Android APK (x86_64)
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-x86_64
+          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
+          if-no-files-found: error
       - name: Package whiteboard web assets
         timeout-minutes: 8
         run: pnpm --dir app exec vite build
@@ -189,34 +221,6 @@ jobs:
         with:
           name: Fcboard-Web
           path: app/build
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        timeout-minutes: 3
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-arm64-v8a
-          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        timeout-minutes: 3
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-armeabi-v7a
-          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        timeout-minutes: 3
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-x86
-          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        timeout-minutes: 3
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-x86_64
-          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
           if-no-files-found: error
       - name: Upload deployable live-share service and matching viewer
         timeout-minutes: 3

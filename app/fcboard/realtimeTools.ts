@@ -11,6 +11,14 @@ const point = {
 const ids = { type: "array", items: { type: "string" }, minItems: 1 };
 const bindings = [
   {
+    name: "visual_document_question",
+    command: "document.ask",
+    description:
+      "Use for a question or follow-up about the current document. This captures the current window and asks a vision model using its image and text. Read the answer aloud.",
+    properties: { question: { type: "string" } },
+    required: ["question"],
+  },
+  {
     name: "board_tools",
     command: "agent.tools",
     description:

@@ -4,10 +4,12 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 import { documentSharing } from "./documentSharing";
+import { documentBlob, documentMime } from "./documentReader";
 import { SceneSync } from "./sceneSync";
 import { SharedDocumentScene } from "./sharedDocumentScene";
 
 import type { SharedDocumentSource } from "./documentSharing";
+import type { DocumentInput } from "./documentInput";
 import type { ScenePacket, SharedDocument } from "./sceneSync";
 
 /** The same room follows the host's board or original, editable courseware. */
@@ -21,7 +23,7 @@ export class LiveSceneSync {
   private disposed = false;
   private stop?: () => void;
   private document?: SharedDocument;
-  private file?: File;
+  private file?: DocumentInput;
   private generation = 0;
   private receivedEpoch = -1;
   private receiving = 0;
@@ -30,7 +32,7 @@ export class LiveSceneSync {
   private outgoing: Promise<void> = Promise.resolve();
   private sentDocument = "";
   private assets = new Map<string, File>();
-  private encoded = new WeakMap<File, Promise<string>>();
+  private encoded = new WeakMap<DocumentInput, Promise<string>>();
 
   constructor(
     private api: FcboardImperativeAPI,
@@ -158,7 +160,7 @@ export class LiveSceneSync {
     const generation = ++this.generation;
     let encoded = this.encoded.get(source.file);
     if (!encoded) {
-      encoded = getDataURL(source.file);
+      encoded = documentBlob(source.file).then(getDataURL);
       this.encoded.set(source.file, encoded);
     }
     const dataURL = await encoded;
@@ -175,7 +177,7 @@ export class LiveSceneSync {
     this.selectHost(current, {
       id: current.id,
       name: current.file.name,
-      mimeType: current.file.type,
+      mimeType: documentMime(current.file),
       page: current.page,
       dataURL,
       view: current.view,

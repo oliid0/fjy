@@ -114,6 +114,7 @@ public class MediaPlugin extends Plugin {
     private void readSelection(PluginCall call, ActivityResult result) {
         java.io.File copies = null;
         List<java.io.File> created = new ArrayList<>();
+        List<String> courseware = new ArrayList<>();
         try {
             Intent data = result.getData();
             if (result.getResultCode() != Activity.RESULT_OK || data == null) { call.resolve(new JSObject().put("cancelled", true)); return; }
@@ -153,6 +154,11 @@ public class MediaPlugin extends Plugin {
                     if (playlist.length() == 0) selection.put("title", name).put("video", mime.startsWith("video/"));
                     playlist.put(entry);
                 } else if ("application/octet-stream".equals(mapped)) {
+                    if (!"bzd".equals(extension) && !"bz".equals(extension) && !"bnf".equals(extension)) {
+                        JSObject source = CoursewareSource.importSource(getContext(), uri);
+                        courseware.add(source.getString("key"));
+                        entry = source.put("name", name).put("mime", mime);
+                    }
                     documents.put(entry);
                 } else {
                     throw new IllegalArgumentException("Unsupported file type: "+name);
@@ -190,6 +196,7 @@ public class MediaPlugin extends Plugin {
             }
             call.resolve(selection);
         } catch (Exception error) {
+            for (String key : courseware) CoursewareSource.discard(getContext(), key);
             for (java.io.File copy : created) copy.delete();
             if (copies != null) copies.delete();
             call.reject(error.getMessage(), error);

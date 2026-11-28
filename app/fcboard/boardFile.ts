@@ -12,7 +12,7 @@ import type { BzdAssetLoader } from "./bzd";
 const engine = registerPlugin<{
   begin(options: {
     size: number;
-    kind?: "jpg" | "pdf";
+    kind?: "jpg" | "pdf" | "document-pdf" | "docx" | "xlsx";
     pages?: { page: number; size: number }[];
   }): Promise<{ id: string }>;
   append(options: { id: string; offset: number; data: string }): Promise<void>;
@@ -239,7 +239,9 @@ const saveBrowserFile = async (
 const saveNativeFile = async (
   blob: Blob,
   name: string,
-  metadata?: { kind: "jpg" | "pdf"; pages: { page: number; size: number }[] },
+  metadata?:
+    | { kind: "jpg" | "pdf"; pages: { page: number; size: number }[] }
+    | { kind: "document-pdf" | "docx" | "xlsx" },
   signal?: AbortSignal,
 ) => {
   signal?.throwIfAborted();
@@ -276,6 +278,38 @@ const saveNativeFile = async (
   } finally {
     await engine.close({ id }).catch(() => {});
   }
+};
+
+export const saveDocumentPdf = async (
+  content: Promise<Blob>,
+  name: string,
+  signal?: AbortSignal,
+) => {
+  if (Capacitor.isNativePlatform()) {
+    return saveNativeFile(
+      await content,
+      name,
+      { kind: "document-pdf" },
+      signal,
+    );
+  }
+  return saveBrowserFile(content, name, "pdf", "application/pdf");
+};
+
+export const saveOfficeDocument = async (
+  content: Promise<Blob>,
+  name: string,
+  extension: "docx" | "xlsx",
+  signal?: AbortSignal,
+) => {
+  if (Capacitor.isNativePlatform()) {
+    return saveNativeFile(await content, name, { kind: extension }, signal);
+  }
+  const mime =
+    extension === "docx"
+      ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  return saveBrowserFile(content, name, extension, mime);
 };
 
 type PageImage = { page: number; blob: Blob | (() => Promise<Blob>) };

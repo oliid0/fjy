@@ -50,7 +50,10 @@ import {
   useHandleLibrary,
 } from "@fcboard/fcboard/data/library";
 
-import { MediaRendererContext } from "@fcboard/fcboard/components/InteractiveResourceFrame";
+import {
+  DocumentRendererContext,
+  MediaRendererContext,
+} from "@fcboard/fcboard/components/InteractiveResourceFrame";
 
 import type { RemoteFcboardElement } from "@fcboard/fcboard/data/reconcile";
 import type { RestoredDataState } from "@fcboard/fcboard/data/restore";
@@ -70,6 +73,7 @@ import type {
 import type { ResolutionType } from "@fcboard/common/utility-types";
 
 import { MediaObject } from "./fcboard/MediaObject";
+import { DocumentObject } from "./fcboard/DocumentObject";
 import { nativeImagePicker } from "./fcboard/boardFile";
 
 import CustomStats from "./CustomStats";
@@ -1124,7 +1128,9 @@ const FcboardApp = () => {
       <Provider store={appJotaiStore}>
         <FcboardAPIProvider>
           <MediaRendererContext.Provider value={MediaObject}>
-            <FcboardWrapper />
+            <DocumentRendererContext.Provider value={DocumentObject}>
+              <FcboardWrapper />
+            </DocumentRendererContext.Provider>
           </MediaRendererContext.Provider>
         </FcboardAPIProvider>
       </Provider>

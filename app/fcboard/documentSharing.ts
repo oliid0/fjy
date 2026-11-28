@@ -1,10 +1,11 @@
 import type { InkStroke } from "./documents";
+import type { DocumentInput } from "./documentInput";
 import type { SharedDocumentView } from "./sceneSync";
 
 /** Private live-view bridge; files and callbacks never enter the AI context. */
 export type SharedDocumentSource = {
   id: string;
-  file: File;
+  file: DocumentInput;
   page: number;
   ready: boolean;
   ink: InkStroke[];

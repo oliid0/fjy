@@ -189,7 +189,9 @@ export class BoardRecorder {
           const canvases = document.querySelectorAll<HTMLCanvasElement>(
             ".fcboard .fcboard__canvas",
           );
-          const documentOpen = !!document.querySelector(".fc-presentation");
+          const documentOpen = !!document.querySelector(
+            ".fc-document-window-view",
+          );
           const needsFrame =
             documentOpen || !!document.querySelector(".fcboard iframe");
           if (

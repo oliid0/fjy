@@ -31,6 +31,7 @@ import {
   documentStrokeBounds,
   loadInk,
 } from "./documents";
+import * as documentReader from "./documentReader";
 import * as documentTools from "./documents";
 import * as ocr from "./ocr";
 import * as ai from "./ai";
@@ -128,7 +129,19 @@ const setup = async (
       return () => listeners.delete(notify);
     },
   } as unknown as FcboardImperativeAPI;
-  const file = new File(["image"], "slide.png");
+  vi.spyOn(documentReader, "openDocumentReader").mockImplementation(
+    async () => ({
+      pages: [{ index: 0, name: "1" }],
+      showThumbnails: false,
+      render: async () => ({
+        ratio: 1000 / 600,
+        text: "",
+        image: new Blob(["image"]),
+      }),
+      close() {},
+    }),
+  );
+  const file = new File(["image"], "slide.pptx");
   const view = render(<FilePreview api={api} file={file} onClose={() => {}} />);
   await waitFor(() =>
     expect(
@@ -156,6 +169,15 @@ const setup = async (
   fireEvent.click(
     screen.getByRole("button", { name: t("fcboard.toggle_annotations") }),
   );
+  const configured = mode ?? preferences.currentItemPenMode;
+  if (configured) {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.style",
+        args: { pen: configured },
+      });
+    });
+  }
   const pointer = (
     type: string,
     x: number,
@@ -197,7 +219,7 @@ it("exposes live original-document ink, applies peer text through the actual edi
     pointer("pointerdown", 100, 100);
     pointer("pointermove", 160, 130);
     const live = documentSharing.current()!;
-    expect(live.file.name).toBe("slide.png");
+    expect(live.file.name).toBe("slide.pptx");
     expect(live.draft).toBe(live.ink[0].id);
     expect(live.ink[0].points.length).toBeGreaterThan(1);
     pointer("pointerup", 160, 130);
@@ -336,9 +358,9 @@ it("chooses a local magic emoji after AI failure on the visible courseware page 
     expect(currentInk()[0]).toMatchObject({ text: "😊", originalText: "😊" });
     expect(svg.textContent).toContain("😊");
     expect(api.updateScene).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.undo_annotation") }),
-    );
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
     expect(currentInk()).toEqual(source);
   } finally {
     host.unmount();
@@ -1823,9 +1845,12 @@ it.each(["pointercancel", "lostpointercapture", "blur", "pointerup"])(
       const before = currentInk();
       const part = before.find((stroke) => stroke.widget)!;
       const at = part.points[0];
-      fireEvent.click(
-        screen.getByRole("button", { name: t("fcboard.erase_annotations") }),
-      );
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "document.tool",
+          args: { tool: "eraser" },
+        });
+      });
       pointer("pointerdown", at[0], at[1], {
         pointerType: "touch",
         width: 4,
@@ -1880,9 +1905,12 @@ it.each(["pointerup", "pointercancel"])(
       pointer("pointerdown", 500, 300);
       pointer("pointerup", 600, 300);
       const before = currentInk();
-      fireEvent.click(
-        screen.getByRole("button", { name: t("fcboard.erase_annotations") }),
-      );
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "document.tool",
+          args: { tool: "eraser" },
+        });
+      });
       pointer("pointerdown", 80, 80);
       pointer("pointermove", 220, 80);
       pointer("pointermove", 220, 160);
@@ -1920,9 +1948,12 @@ it("clips only the circled courseware stroke fragment and restores its original 
     pointer("pointerdown", 500, 300);
     pointer("pointerup", 600, 300);
     const before = currentInk();
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.erase_annotations") }),
-    );
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.tool",
+        args: { tool: "eraser" },
+      });
+    });
     pointer("pointerdown", 145, 70);
     pointer("pointermove", 165, 70);
     pointer("pointermove", 165, 170);
@@ -1955,47 +1986,28 @@ it("clips only the circled courseware stroke fragment and restores its original 
   }
 });
 
-it("opens compact eraser properties from the existing entry, updates real mode and closes without requiring a selection", async () => {
-  const { api, unmount } = await setup();
+it("changes only the current document eraser and starts with red ink", async () => {
+  const { api, draw, unmount } = await setup();
+  const stop = registerCanvasCommands(api);
   try {
-    const entry = screen.getByRole("button", {
-      name: t("fcboard.erase_annotations"),
+    draw();
+    expect(currentInk()[0].color).toBe("#dc2626");
+    const before = api.getAppState();
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.configure",
+        args: { eraserMode: "object", eraserSize: 120 },
+      });
     });
-    fireEvent.click(entry);
-    fireEvent.click(entry);
+    expect(classroomCommands.read("document")).toMatchObject({
+      configuration: { eraser: { mode: "object", size: 120 } },
+    });
+    expect(api.getAppState()).toEqual(before);
     expect(
-      screen.getByRole("dialog", { name: t("fcboard.eraser_settings") }),
-    ).toBeVisible();
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.erase_entire_object") }),
-    );
-    expect(api.getAppState().eraserMode).toBe("object");
-    fireEvent.keyDown(
-      screen.getByRole("group", { name: t("fcboard.erase_mode") }),
-      { key: "ArrowLeft" },
-    );
-    expect(api.getAppState().eraserMode).toBe("stroke");
-    fireEvent.keyDown(
-      screen.getByRole("group", { name: t("fcboard.erase_mode") }),
-      { key: "ArrowRight" },
-    );
-    expect(api.getAppState().eraserMode).toBe("object");
-    fireEvent.change(
-      screen.getByRole("slider", {
-        name: t("fcboard.eraser_size_screen_pixels"),
-      }),
-      { target: { value: "120" } },
-    );
-    expect(api.getAppState().eraserSize).toBe(120);
-    fireEvent.keyDown(
-      screen.getByRole("dialog", { name: t("fcboard.eraser_settings") }),
-      { key: "Escape" },
-    );
-    expect(
-      screen.queryByRole("dialog", { name: t("fcboard.eraser_settings") }),
+      screen.queryByRole("button", { name: t("fcboard.erase_annotations") }),
     ).toBeNull();
-    expect(entry).toHaveAttribute("aria-pressed", "true");
   } finally {
+    stop();
     unmount();
   }
 });

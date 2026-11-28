@@ -19,10 +19,10 @@ const openFile = async (page: Page, name: string) => {
   const choose = page.waitForEvent("filechooser");
   await selectMenu(page, "打开");
   await (await choose).setFiles(fixture(name));
-  await expect(page.getByRole("button", { name: "板书开关" })).toBeEnabled({
+  await expect(page.getByRole("button", { name: "关闭课件" })).toBeEnabled({
     timeout: 30000,
   });
-  await expect(page.locator(".fc-document-status")).toHaveCount(0);
+  await expect(page.locator(".fc-document-status[role=alert]")).toHaveCount(0);
 };
 
 for (const name of [
@@ -34,43 +34,78 @@ for (const name of [
   "SimpleMultiCell.xlsx",
   "helloworld.pdf",
 ]) {
-  test(`locally renders real ${name}`, async ({ page }, info) => {
+  test(`locally renders real ${name} inside a whiteboard window`, async ({
+    page,
+  }, info) => {
     await page.goto("/");
     await openFile(page, name);
-    if (/pptx?$/.test(name)) {
-      await expect(page.locator(".fc-slides svg").first()).toBeVisible();
-      expect(await page.locator(".fc-slides").innerHTML()).toContain("<svg");
-    } else {
-      const body = page
-        .frameLocator(".fc-document-stage iframe")
-        .locator("body");
+    const document = page.locator(".fc-document-window-view");
+    const board = page.getByRole("toolbar", { name: "白板工具栏" });
+    if (/\.(?:pptx?|pdf)$/.test(name)) {
+      const image = document.locator(".fc-document-surface > img");
       await expect
-        .poll(async () => (await body.innerText()).trim().length)
-        .toBeGreaterThan(5);
+        .poll(() =>
+          image.evaluate(
+            (element) => (element as HTMLImageElement).naturalWidth,
+          ),
+        )
+        .toBeGreaterThan(0);
+      if (name.endsWith(".pptx")) {
+        await expect(
+          document.getByRole("button", { name: "板书开关" }),
+        ).toBeEnabled();
+        const next = document.getByRole("button", {
+          name: "下一页",
+          exact: true,
+        });
+        if (await next.isEnabled()) {
+          const before = await image.getAttribute("src");
+          await next.click();
+          await expect(image).not.toHaveAttribute("src", before!);
+        }
+      } else if (name.endsWith(".pdf")) {
+        const stage = document.locator(".fc-document-stage");
+        const original = (await stage.boundingBox())!.width;
+        await document
+          .getByRole("button", { name: "放大课件", exact: true })
+          .click();
+        await expect
+          .poll(async () => (await stage.boundingBox())!.width)
+          .toBeGreaterThan(original);
+        await expect(
+          document.getByRole("button", { name: "搜索", exact: true }),
+        ).toBeEnabled();
+        await expect(
+          document.locator(
+            ".fc-document-pages, .fc-document-stage, .fc-document-page-neighbor",
+          ),
+        ).toHaveCount(1);
+      }
+    } else if (/\.docx?$/.test(name)) {
+      await expect(
+        document.locator(".docx-editor__scroll-container"),
+      ).toBeVisible();
+      await expect(
+        document.locator(".docx-editor__scroll-container"),
+      ).not.toBeEmpty();
+    } else {
+      await expect(
+        document
+          .frameLocator(".fc-sheet-office iframe")
+          .locator(".x-spreadsheet canvas"),
+      ).toBeVisible();
+      await expect(
+        document.locator(".fc-office-sheet-nav [role=tab]").first(),
+      ).toBeVisible();
     }
-    const originalWidth = (await page
-      .locator(".fc-document-stage")
-      .boundingBox())!.width;
-    await page.getByRole("button", { name: "放大课件", exact: true }).click();
+    await expect(board).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "重置课件缩放", exact: true }),
-    ).toHaveText("125%");
-    expect(
-      (await page.locator(".fc-document-stage").boundingBox())!.width,
-    ).toBeGreaterThan(originalWidth);
-    await page
-      .getByRole("button", { name: "重置课件缩放", exact: true })
-      .click();
-    const visibleBar = page.getByRole("toolbar", { name: "课件工具栏" });
-    await expect(visibleBar).toBeVisible();
-    await expect(
-      page.getByRole("toolbar", { name: "白板工具栏" }),
-    ).toBeHidden();
+      document.getByRole("button", { name: "课件语音指令", exact: true }),
+    ).toHaveCount(0);
     await page.screenshot({ path: info.outputPath(`${name}.png`) });
-    await page.getByRole("button", { name: "关闭课件" }).click();
-    await expect(
-      page.getByRole("toolbar", { name: "白板工具栏" }),
-    ).toBeVisible();
+    await document.getByRole("button", { name: "关闭课件" }).click();
+    await expect(document).toHaveCount(0);
+    await expect(board).toBeVisible();
   });
 }
 
@@ -92,8 +127,27 @@ test("transparent PPT ink survives closing, can be erased, and undo restores it"
   const original = (await layer.locator("path").getAttribute("d"))!.match(
     /-?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi,
   )!;
-  await page.getByRole("button", { name: "擦除板书", exact: true }).click();
-  await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.3);
+  await layer.evaluate(
+    (surface, at) => {
+      surface.setPointerCapture = () => {};
+      const pointer = {
+        bubbles: true,
+        pointerId: 2,
+        pointerType: "touch",
+        isPrimary: true,
+        clientX: at.x,
+        clientY: at.y,
+        width: 42,
+        height: 42,
+        button: 0,
+      };
+      surface.dispatchEvent(
+        new PointerEvent("pointerdown", { ...pointer, buttons: 1 }),
+      );
+      surface.dispatchEvent(new PointerEvent("pointerup", pointer));
+    },
+    { x: box.x + box.width * 0.35, y: box.y + box.height * 0.3 },
+  );
   await expect(layer.locator("path")).toHaveCount(2);
   const fragments = await layer
     .locator("path")
@@ -105,7 +159,8 @@ test("transparent PPT ink survives closing, can be erased, and undo restores it"
     );
   expect(fragments[0].slice(0, 2)).toEqual(original.slice(0, 2));
   expect(fragments[1].slice(-2)).toEqual(original.slice(-2));
-  await page.getByRole("button", { name: "撤销板书", exact: true }).click();
+  await page.locator(".fc-document-window-view").focus();
+  await page.keyboard.press("Control+z");
   await expect(layer.locator("path")).toHaveCount(1);
   await page.getByRole("button", { name: "关闭课件" }).click();
   await openFile(page, "testPPT.pptx");
@@ -373,7 +428,7 @@ test("voice draws into the visible PPT and internal pinch updates its borderless
   });
   await page.goto("/");
   await openFile(page, "testPPT.pptx");
-  await page.getByRole("button", { name: "课件语音指令", exact: true }).click();
+  await startVoice(page);
   await expect(
     page.getByRole("toolbar", { name: "选区操作", exact: true }),
   ).toBeVisible();
@@ -383,10 +438,11 @@ test("voice draws into the visible PPT and internal pinch updates its borderless
   await expect
     .poll(() => page.locator(".fc-document-ink path").count())
     .toBeGreaterThan(3);
-  await page.mouse.click(20, 120);
-  await expect(
-    page.getByRole("button", { name: "课件语音指令", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() =>
+      page.evaluate(() => typeof Reflect.get(window, "fcTestSpeechNext")),
+    )
+    .toBe("function");
   await page.evaluate(() =>
     Reflect.get(window, "fcTestSpeechNext")("画y=a*x+1的函数图像"),
   );
@@ -394,13 +450,7 @@ test("voice draws into the visible PPT and internal pinch updates its borderless
     ".fc-document-ink foreignObject:has([data-native-resource-object-id])",
   );
   await expect(graph.locator('canvas[aria-label="y = a*x+1"]')).toBeVisible();
-  const selectionTool = page.getByRole("button", {
-    name: "圈选课件板书",
-    exact: true,
-  });
-  await expect(selectionTool).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "板书开关", exact: true }).click();
-  await expect(selectionTool).toHaveAttribute("aria-pressed", "false");
   await zoomFunctionGraph(page, graph, "img");
   await expect(graph.getByRole("img", { name: "y = a*x+1" })).toBeVisible();
   await page.screenshot({ path: info.outputPath("voice-ppt-function.png") });
@@ -422,11 +472,10 @@ test("voice draws into the visible PPT and internal pinch updates its borderless
     visible.height,
   );
   await page.screenshot({ path: info.outputPath("voice-ppt-writing.png") });
-  await expect(
-    page.getByRole("button", { name: "课件语音指令", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "课件语音指令", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "课件语音指令", exact: true }),
-  ).toHaveAttribute("aria-pressed", "false");
+  await startVoice(page);
+  await expect
+    .poll(() =>
+      page.evaluate(() => typeof Reflect.get(window, "fcTestSpeechNext")),
+    )
+    .toBe("undefined");
 });

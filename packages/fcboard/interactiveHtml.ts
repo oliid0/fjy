@@ -11,6 +11,7 @@ import type { Visualization } from "./visualizationRuntime";
 
 export { calculatorResourceId };
 export const mediaResourceId = "builtin-media";
+export const documentResourceId = "builtin-document";
 
 export const resourceLibraryNames = ["vega", "jsxgraph"] as const;
 export type ResourceLibrary = typeof resourceLibraryNames[number];
@@ -19,6 +20,7 @@ export type InteractiveResource = {
   title: string;
   html: string;
   media?: { key: string; video: boolean };
+  document?: { key: string };
   calculator?: CalculatorState;
   visualization?: Visualization;
   libraries?: ResourceLibrary[];
@@ -141,6 +143,17 @@ export const validateInteractiveResource = (
       html: "",
       title: resource.title.trim(),
       media: { key: media.key, video: media.video },
+    };
+  }
+  if (resource.id === documentResourceId) {
+    if (!resource.document || !/^[a-f0-9-]{36}$/i.test(resource.document.key)) {
+      throw new Error("Invalid local document");
+    }
+    return {
+      id: documentResourceId,
+      title: resource.title.trim(),
+      html: "",
+      document: { key: resource.document.key },
     };
   }
   const libraries: unknown[] = [];

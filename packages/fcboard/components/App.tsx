@@ -1771,9 +1771,10 @@ class App extends React.Component<AppProps, AppState> {
               this.state.activeEmbeddable?.state === "active") ||
               (!!this.props.UIOptions.unifiedToolbar &&
                 !!el.customData?.fcInteractiveResource &&
-                ["selection", "lasso", "hand"].includes(
-                  this.state.activeTool.type,
-                ) &&
+                (!!el.customData.fcInteractiveResource.document ||
+                  ["selection", "lasso", "hand"].includes(
+                    this.state.activeTool.type,
+                  )) &&
                 this.state.cursorButton !== "down"));
           const isHovered =
             this.state.activeEmbeddable?.element === el &&

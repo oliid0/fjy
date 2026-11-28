@@ -12,6 +12,7 @@ import {
 import {
   calculatorResourceId,
   mediaResourceId,
+  documentResourceId,
   interactiveHtml,
   resourceNeedsRuntime,
 } from "../interactiveHtml";
@@ -48,11 +49,21 @@ export type ResourceLiveUpdate = {
 
 export const MediaRendererContext =
   createContext<ComponentType<InteractiveResourceFrameProps> | null>(null);
+export const DocumentRendererContext =
+  createContext<ComponentType<InteractiveResourceFrameProps> | null>(null);
 
 export const InteractiveResourceFrame = (
   props: InteractiveResourceFrameProps,
 ) => {
   const MediaRenderer = useContext(MediaRendererContext);
+  const DocumentRenderer = useContext(DocumentRendererContext);
+  if (props.resource.id === documentResourceId) {
+    return DocumentRenderer && props.resource.document ? (
+      <DocumentRenderer {...props} />
+    ) : (
+      <span>{props.resource.title}</span>
+    );
+  }
   if (props.resource.id === mediaResourceId) {
     return MediaRenderer && props.resource.media?.key ? (
       <MediaRenderer {...props} />

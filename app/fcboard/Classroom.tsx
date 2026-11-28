@@ -77,6 +77,12 @@ import {
   documentSourceSignature,
   inkSnapshot,
 } from "./documents";
+import {
+  focusDocument,
+  focusedDocument,
+  openDocumentWindow,
+} from "./documentWindows";
+import { isNativeDocumentInput } from "./documentInput";
 
 import { Teacher } from "./Teacher";
 import { TeachingTools } from "./TeachingTools";
@@ -134,6 +140,8 @@ import { createVoiceTurns } from "./voiceTurns";
 import { runVoiceAgent } from "./voiceAgent";
 
 import "./classroom.scss";
+
+import type { DocumentInput } from "./documentInput";
 
 import type { SettingsPage } from "./SettingsNavigation";
 import type { DuplexSpeechHandle } from "./duplexSpeech";
@@ -320,20 +328,18 @@ export const Classroom = ({
   const [activeId, setActiveId] = useState("");
   const [urls, setUrls] = useState<string[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const [preview, setPreview] = useState<{
-    file: File;
-    View: typeof import("./FilePreview").FilePreview;
-  } | null>(null);
-  const previewRef = useRef<File | null>(null);
-  const recentFiles = useRef(new Map<string, File>());
-  previewRef.current = preview?.file || null;
+  const recentFiles = useRef(new Map<string, DocumentInput>());
   const receivedIds = useRef(new Set<string>());
   const incoming = useRef<Upload[]>([]);
   const openingUpload = useRef(false);
-  const previewReady = useRef<{
-    resolve: () => void;
-    reject: (error: Error) => void;
-  } | null>(null);
+  const hasDocumentWindow = useCallback(
+    () =>
+      api
+        .getSceneElements()
+        .some((element) => element.customData?.fcInteractiveResource?.document),
+    [api],
+  );
+  useEffect(() => api.onCanvasPress?.(() => focusDocument()), [api]);
   const actionBusy = useRef(false);
   const calculationRequests = useRef(new Set<AbortController>());
   useEffect(() => {
@@ -361,7 +367,7 @@ export const Classroom = ({
     panelRef,
     panel === "settings"
       ? "[data-testid='main-menu-trigger']"
-      : "[data-board-insert], .fc-presentation-toolbar",
+      : "[data-board-insert], .fc-document-toolbar",
     !!panel && panel !== "plot" && panel !== "settings",
   );
   const active = records.find((item) => item.id === activeId);
@@ -419,25 +425,19 @@ export const Classroom = ({
       }
     });
   }, [api]);
-  const showPreview = useCallback(async (file: File, signal?: AbortSignal) => {
-    signal?.throwIfAborted();
-    const { FilePreview } = await import("./FilePreview");
-    signal?.throwIfAborted();
-    recentFiles.current.set(file.name, file);
-    if (recentFiles.current.size > 5) {
-      recentFiles.current.delete(recentFiles.current.keys().next().value!);
-    }
-    previewReady.current?.reject(
-      new DOMException("Document changed", "AbortError"),
-    );
-    classroomCommands.invalidate(signal);
-    previewRef.current = file;
-    setPreview({ file, View: FilePreview });
-    setPanel(null);
-    return new Promise<void>((resolve, reject) => {
-      previewReady.current = { resolve, reject };
-    });
-  }, []);
+  const showPreview = useCallback(
+    async (file: DocumentInput, signal?: AbortSignal) => {
+      signal?.throwIfAborted();
+      recentFiles.current.set(file.name, file);
+      if (recentFiles.current.size > 5) {
+        recentFiles.current.delete(recentFiles.current.keys().next().value!);
+      }
+      classroomCommands.invalidate(signal);
+      setPanel(null);
+      await openDocumentWindow(file, signal);
+    },
+    [],
+  );
   const openUpload = useCallback(
     async (file: Upload, signal?: AbortSignal) => {
       openingUpload.current = true;
@@ -722,7 +722,7 @@ export const Classroom = ({
         file,
         ...files.filter((item) => item.id !== file.id),
       ]);
-      if (previewRef.current || openingUpload.current) {
+      if (hasDocumentWindow() || openingUpload.current) {
         incoming.current.push(file);
         setStatus(
           t("fcboard.name_received_close_the_current_document_to_open_it", {
@@ -739,7 +739,7 @@ export const Classroom = ({
       disposed = true;
       void listener.then((handle) => handle.remove());
     };
-  }, [openUpload]);
+  }, [hasDocumentWindow, openUpload]);
 
   useEffect(() => {
     if (!recording) {
@@ -774,7 +774,7 @@ export const Classroom = ({
           fresh.forEach((file) => receivedIds.current.add(file.id));
           if (fresh.length) {
             incoming.current.push(...fresh.reverse());
-            if (!previewRef.current && !openingUpload.current) {
+            if (!hasDocumentWindow() && !openingUpload.current) {
               const first = incoming.current.shift();
               if (first) {
                 void openUpload(first).catch((failure) =>
@@ -789,7 +789,7 @@ export const Classroom = ({
     refresh();
     const timer = setInterval(refresh, 2000);
     return () => clearInterval(timer);
-  }, [urls, openUpload]);
+  }, [urls, hasDocumentWindow, openUpload]);
 
   useEffect(() => {
     if (panel) {
@@ -1713,6 +1713,20 @@ Tools and controls depend on the current interface; open the relevant surface be
     try {
       const handle = await startDuplexSpeech({
         stream,
+        visualFrame: Capacitor.isNativePlatform()
+          ? async (previousStamp) => {
+              const id = focusedDocument();
+              const name = `document.voice.frame.${id}`;
+              if (!id || !classroomCommands.has(name)) {
+                return;
+              }
+              const view = (await classroomCommands.execute({
+                name,
+                args: { previousStamp },
+              })) as { stamp: string; image: string } | undefined;
+              return focusedDocument() === id ? view : undefined;
+            }
+          : undefined,
         signal: opening.signal,
         line: (line) => {
           if (generation === voiceGeneration.current) {
@@ -2961,13 +2975,32 @@ Tools and controls depend on the current interface; open the relevant surface be
         "document.share.open",
         "@internal",
         async (args) => {
-          if (!(args.file instanceof File)) {
+          if (
+            !(args.file instanceof File) &&
+            !isNativeDocumentInput(args.file)
+          ) {
             throw new Error(t("fcboard.invalid_sync_data"));
           }
           await showPreview(
             args.file,
             args.signal instanceof AbortSignal ? args.signal : undefined,
           );
+        },
+      ),
+      classroomCommands.register(
+        "document.window.closed",
+        "@internal",
+        async ({ advance, signal }) => {
+          const source = signal instanceof AbortSignal ? signal : undefined;
+          classroomCommands.invalidate(source);
+          const next = advance === true ? incoming.current.shift() : undefined;
+          if (next) {
+            try {
+              await openUpload(next, source);
+            } catch (failure) {
+              setError(errorMessage(failure));
+            }
+          }
         },
       ),
       classroomCommands.register(
@@ -3995,46 +4028,6 @@ Tools and controls depend on the current interface; open the relevant surface be
             )}
           </div>
         </MaterialPanel>
-      )}
-      {preview && (
-        <preview.View
-          api={api}
-          key={`${preview.file.name}-${preview.file.lastModified}`}
-          file={preview.file}
-          onClose={(advance = true, source?: AbortSignal) => {
-            previewReady.current?.reject(
-              new DOMException("Document closed", "AbortError"),
-            );
-            previewReady.current = null;
-            classroomCommands.invalidate(source);
-            previewRef.current = null;
-            setPreview(null);
-            const next = advance ? incoming.current.shift() : undefined;
-            if (next) {
-              void openUpload(next, source).catch((failure) =>
-                setError(errorMessage(failure)),
-              );
-            }
-          }}
-          listening={listening}
-          onReady={(failure) => {
-            const waiting = previewReady.current;
-            previewReady.current = null;
-            if (failure) {
-              waiting?.reject(new Error(failure));
-            } else {
-              waiting?.resolve();
-            }
-          }}
-          onVoice={() => {
-            void toggleVoice().catch((failure) =>
-              setError(errorMessage(failure)),
-            );
-          }}
-          onTools={() => {
-            void classroomCommands.execute({ name: "tools.open" });
-          }}
-        />
       )}
     </div>
   );

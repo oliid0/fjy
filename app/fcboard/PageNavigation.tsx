@@ -31,9 +31,7 @@ export const PageNavigation = () => {
         target?.closest(
           'input,textarea,select,[contenteditable],[role="menu"],[role="listbox"],[role="combobox"]',
         ) ||
-        document.querySelector(
-          '[role="dialog"]:not(.fc-preview),[role="menu"],[role="listbox"]',
-        )
+        document.querySelector('[role="dialog"],[role="menu"],[role="listbox"]')
       ) {
         return;
       }

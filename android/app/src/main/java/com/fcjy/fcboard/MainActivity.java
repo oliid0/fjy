@@ -128,6 +128,16 @@ public class MainActivity extends BridgeActivity {
         // Native toolbar labels are 6sp / 6.7dp. WebView defaults to an 8px minimum.
         // https://developer.android.com/reference/android/webkit/WebSettings#setMinimumFontSize(int)
         if (getBridge() != null && getBridge().getWebView() != null) {
+            com.getcapacitor.Bridge bridge = getBridge();
+            android.net.Uri origin = android.net.Uri.parse(bridge.getLocalUrl());
+            bridge.setWebViewClient(new com.getcapacitor.BridgeWebViewClient(bridge) {
+                @Override public android.webkit.WebResourceResponse shouldInterceptRequest(
+                        android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+                    android.webkit.WebResourceResponse courseware =
+                        CoursewareSource.intercept(MainActivity.this, origin, request);
+                    return courseware != null ? courseware : super.shouldInterceptRequest(view, request);
+                }
+            });
             getBridge().getWebView().getSettings().setMinimumFontSize(1);
             getBridge().getWebView().getSettings().setMinimumLogicalFontSize(1);
         }

@@ -26,19 +26,27 @@ const board = ["bzd", "bz", "bnf"];
 const documents = [
   "ppt",
   "pptx",
+  "pptm",
   "pps",
   "ppsx",
   "pdf",
   "doc",
   "docx",
+  "dotx",
   "xls",
   "xlsx",
+  "xlsm",
   "csv",
+  "tsv",
   "odt",
   "ods",
   "odp",
   "rtf",
   "txt",
+  "epub",
+  "md",
+  "markdown",
+  "parquet",
 ];
 
 /** Pass the same extension table to the Android picker. Known extensions take

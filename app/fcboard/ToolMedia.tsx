@@ -2,11 +2,9 @@ import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { fileOpen } from "browser-fs-access";
 import {
-  getDataURL,
   normalizeFile,
   isSupportedImageFile,
 } from "@fcboard/fcboard/data/blob";
-import { loadHTMLImageElement } from "@fcboard/element/image";
 import { t } from "@fcboard/fcboard/i18n";
 import { mediaResourceId } from "@fcboard/fcboard/interactiveHtml";
 
@@ -14,8 +12,8 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { contentViewport } from "./board";
 import { Media } from "./builtinNative";
+import { isNativeDocumentInput } from "./documentInput";
 import { classroomCommands } from "./commands";
-import { insertImageResult } from "./imageGeneration";
 import { pendingMediaPlayback, saveMediaFiles } from "./mediaPlaylist";
 import {
   boardFileKind,
@@ -26,6 +24,7 @@ import {
 } from "./fileTypes";
 
 import type { InkStroke } from "./documents";
+import type { DocumentInput } from "./documentInput";
 
 export const ToolMedia = ({ api }: { api: FcboardImperativeAPI }) => {
   useEffect(() => {
@@ -37,7 +36,7 @@ export const ToolMedia = ({ api }: { api: FcboardImperativeAPI }) => {
       signal.throwIfAborted();
       let images: File[] = [];
       let playlist: File[] = [];
-      let documents: File[] = [];
+      let documents: DocumentInput[] = [];
       let key: string | undefined;
       let title: string | undefined;
       let video = false;
@@ -59,6 +58,13 @@ export const ToolMedia = ({ api }: { api: FcboardImperativeAPI }) => {
           );
         }
         for (const item of result.documents || []) {
+          if (isNativeDocumentInput(item)) {
+            documents.push(item);
+            continue;
+          }
+          if (!("uri" in item)) {
+            throw new Error(t("alerts.couldNotLoadInvalidFile"));
+          }
           const response = await fetch(Capacitor.convertFileSrc(item.uri), {
             signal,
           });
@@ -104,25 +110,13 @@ export const ToolMedia = ({ api }: { api: FcboardImperativeAPI }) => {
         }
       }
       signal.throwIfAborted();
-      const courseware = documents.filter(
-        (file) => boardFileKind(file) === "document",
-      );
-      if (courseware.length > 1) {
-        throw new Error(t("fcboard.open_one_courseware"));
-      }
       for (const file of documents) {
-        if (boardFileKind(file) === "board") {
-          await classroomCommands.execute({
-            name: "board.open",
-            args: { file, signal },
-          });
-        }
-      }
-      signal.throwIfAborted();
-      if (courseware.length) {
         await classroomCommands.execute({
-          name: "document.share.open",
-          args: { file: courseware[0], signal },
+          name:
+            file instanceof File && boardFileKind(file) === "board"
+              ? "board.open"
+              : "document.share.open",
+          args: { file, signal },
         });
       }
       signal.throwIfAborted();
@@ -140,29 +134,12 @@ export const ToolMedia = ({ api }: { api: FcboardImperativeAPI }) => {
           }),
         );
         signal.throwIfAborted();
-        if (classroomCommands.has("document.draw")) {
-          for (const image of normalizedImages) {
-            const dataURL = await getDataURL(image);
-            const bitmap = await loadHTMLImageElement(dataURL);
-            await insertImageResult(
-              api,
-              {
-                dataURL,
-                mimeType: image.type,
-                width: bitmap.naturalWidth,
-                height: bitmap.naturalHeight,
-              },
-              signal,
-            );
-          }
-        } else {
-          const view = contentViewport(api);
-          await api.insertImages(
-            normalizedImages,
-            (view.left + view.right) / 2,
-            (view.top + view.bottom) / 2,
-          );
-        }
+        const view = contentViewport(api);
+        await api.insertImages(
+          normalizedImages,
+          (view.left + view.right) / 2,
+          (view.top + view.bottom) / 2,
+        );
       }
       if (!key) {
         return { images: images.length, documents: documents.length };

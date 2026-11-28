@@ -54,7 +54,7 @@ export const useAnchoredPanel = (
       const unit = Math.min(1, (rect?.height || 48) / 48);
       const gap = 16 * unit;
       const toolbar = anchor
-        ?.closest("[role='toolbar'], .fc-presentation-toolbar")
+        ?.closest("[role='toolbar']")
         ?.getBoundingClientRect();
       const availableHeight = Math.max(
         112,

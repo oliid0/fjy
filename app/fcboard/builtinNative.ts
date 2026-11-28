@@ -50,7 +50,10 @@ export type MediaBounds = {
 };
 export type MediaPick = {
   images?: { uri: string; name: string; mime: string }[];
-  documents?: { uri: string; name: string; mime: string }[];
+  documents?: (
+    | { uri: string; name: string; mime: string }
+    | import("./documentInput").NativeDocumentInput
+  )[];
   key?: string;
   title?: string;
   video?: boolean;

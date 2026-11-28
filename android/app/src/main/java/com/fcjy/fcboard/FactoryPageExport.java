@@ -13,7 +13,10 @@ final class FactoryPageExport {
     enum Kind {
         BOARD("bzd", "application/octet-stream"),
         IMAGE("jpg", "image/jpeg"),
-        PDF("pdf", "application/pdf");
+        PDF("pdf", "application/pdf"),
+        DOCUMENT_PDF("pdf", "application/pdf"),
+        WORD("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        SHEET("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
         final String extension, mime;
 
@@ -23,11 +26,14 @@ final class FactoryPageExport {
         }
 
         static Kind read(String extension) throws IOException {
+            if ("document-pdf".equals(extension)) return DOCUMENT_PDF;
             for (Kind kind : values()) {
                 if (kind.extension.equals(extension)) return kind;
             }
             throw new IOException("Unsupported whiteboard file type");
         }
+
+        boolean rasterPages() { return this == IMAGE || this == PDF; }
     }
 
     static final class Page {

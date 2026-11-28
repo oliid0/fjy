@@ -40,6 +40,7 @@ public class DuplexSpeechPlugin extends Plugin {
     private final java.util.Set<String> opening = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static final class Session {
         final String id;
+        final boolean visual;
         final CountDownLatch ready = new CountDownLatch(1);
         volatile boolean closed;
         volatile String error;
@@ -50,7 +51,7 @@ public class DuplexSpeechPlugin extends Plugin {
         final ArrayBlockingQueue<byte[]> input = new ArrayBlockingQueue<>(100);
         volatile long lastCapture;
         volatile ScheduledFuture<?> inputPump;
-        Session(String id) { this.id = id; }
+        Session(String id, boolean visual) { this.id = id; this.visual = visual; }
     }
     private void emit(Session session, JSONObject event) {
         if (!session.closed && active == session) {
@@ -96,7 +97,10 @@ public class DuplexSpeechPlugin extends Plugin {
                 opening.remove(id);
                 call.reject("Enter a Doubao Speech API key with Seeduplex enabled"); return;
             }
-            Session session = new Session(id);
+            JSONObject configurationSession = configuration.optJSONObject("session");
+            boolean visual = configurationSession != null &&
+                "1.3.0.0".equals(configurationSession.optString("model"));
+            Session session = new Session(id, visual);
             synchronized (this) {
                 if (!opening.remove(id)) { call.reject("Native voice session cancelled"); return; }
                 if (active != null && (active.closed || active.error != null)) release(active);
@@ -125,7 +129,8 @@ public class DuplexSpeechPlugin extends Plugin {
                     }
                 }
                 Request request = new Request.Builder()
-                    .url("wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue")
+                    .url(visual ? "wss://openspeech.bytedance.com/api/v3/realtime"
+                        : "wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue")
                     .header("X-Api-Key", key).build();
                 WebSocket connected = client.newWebSocket(request, new WebSocketListener() {
                     @Override public void onOpen(WebSocket socket, Response response) {
@@ -139,7 +144,8 @@ public class DuplexSpeechPlugin extends Plugin {
                             JSONObject event = new JSONObject(text);
                             String type = event.optString("type");
                             if (session.audio != null) {
-                                if ("conversation.item.input_audio_transcription.started".equals(type) || "response.canceled".equals(type)) session.audio.interrupt();
+                                if ((!session.visual && "conversation.item.input_audio_transcription.started".equals(type)) ||
+                                    "response.canceled".equals(type)) session.audio.interrupt();
                                 if ("response.output_audio.delta".equals(type)) {
                                     session.audio.play(Base64.decode(event.optString("audio", event.optString("delta", "")), Base64.DEFAULT));
                                     return; // PCM is consumed natively; do not duplicate base64 traffic through WebView.

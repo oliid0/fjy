@@ -343,74 +343,6 @@ export const loadInk = async (key: string) =>
 export const saveInk = (key: string, value: DocumentInk) =>
   set(`ink:${key}`, value, storage);
 
-export class OfficeReader {
-  private worker: Worker;
-  private id = 0;
-  private pending = new Map<
-    number,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void }
-  >();
-  constructor() {
-    this.worker = new Worker(new URL("./office.worker.ts", import.meta.url), {
-      type: "module",
-    });
-    this.worker.onmessage = ({ data }) => {
-      const task = this.pending.get(data.id);
-      this.pending.delete(data.id);
-      if (data.error) {
-        const message =
-          data.error === "OFFICE_DOCUMENT_ENCRYPTED"
-            ? t("fcboard.this_file_is_encrypted_use_an_unencrypted_document")
-            : data.error === "OFFICE_DOCUMENT_NOT_OPEN"
-            ? t("fcboard.no_document_is_open")
-            : data.error;
-        task?.reject(new Error(message));
-      } else {
-        task?.resolve(data.value);
-      }
-    };
-    this.worker.onerror = () => {
-      this.pending.forEach((task) =>
-        task.reject(
-          new Error(
-            t("fcboard.document_engine_failed_to_start_open_the_file_again"),
-          ),
-        ),
-      );
-      this.pending.clear();
-    };
-  }
-  private request<T>(
-    type: string,
-    value: Record<string, unknown> = {},
-  ): Promise<T> {
-    const id = ++this.id;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, {
-        resolve: (result) => resolve(result as T),
-        reject,
-      });
-      this.worker.postMessage({ id, type, ...value });
-    });
-  }
-  open(file: File, bytes: ArrayBuffer) {
-    return this.request<{ index: number; name: string }[]>("open", {
-      bytes,
-      name: file.name,
-    });
-  }
-  render(page: number) {
-    return this.request<string>("render", { page });
-  }
-  close() {
-    this.worker.terminate();
-    this.pending.forEach((task) =>
-      task.reject(new DOMException("Document closed", "AbortError")),
-    );
-    this.pending.clear();
-  }
-}
-
 export const htmlText = (html: string) => {
   const document = new DOMParser().parseFromString(html, "text/html");
   document
@@ -854,17 +786,29 @@ export const shapeInk = (
   };
 };
 
-export const inkSnapshot = async (
+export const inkBitmap = async (
   strokes: InkStroke[],
   height: number,
   background?: Blob,
   scroll = 0,
-  options?: { transparent?: boolean; left?: number; width?: number },
+  options?: {
+    transparent?: boolean;
+    left?: number;
+    width?: number;
+    uncropped?: boolean;
+    jpegQuality?: number;
+  },
 ) => {
   const canvas = document.createElement("canvas");
   const requestedWidth = options?.width ?? 1000;
-  const requestedHeight = Math.max(1, Math.min(1600, Math.round(height)));
+  const requestedHeight = Math.max(
+    1,
+    options?.uncropped
+      ? Math.round(height)
+      : Math.min(1600, Math.round(height)),
+  );
   if (
+    !Number.isFinite(requestedHeight) ||
     !Number.isFinite(requestedWidth) ||
     requestedWidth <= 0 ||
     !Number.isFinite(options?.left ?? 0)
@@ -924,7 +868,7 @@ export const inkSnapshot = async (
   if (background) {
     const url = URL.createObjectURL(background);
     try {
-      await drawImage(url, 0, 0, 1000, canvas.height);
+      await drawImage(url, 0, 0, 1000 * snapshotScale, canvas.height);
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -1012,15 +956,17 @@ export const inkSnapshot = async (
       }
     }
   }
-  return getDataURL(
-    await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob(
-        (blob) =>
-          blob
-            ? resolve(blob)
-            : reject(new Error(t("fcboard.could_not_capture_document"))),
-        "image/png",
-      ),
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (blob) =>
+        blob
+          ? resolve(blob)
+          : reject(new Error(t("fcboard.could_not_capture_document"))),
+      options?.jpegQuality === undefined ? "image/png" : "image/jpeg",
+      options?.jpegQuality,
     ),
   );
 };
+
+export const inkSnapshot = async (...args: Parameters<typeof inkBitmap>) =>
+  getDataURL(await inkBitmap(...args));

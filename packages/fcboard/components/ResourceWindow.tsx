@@ -32,6 +32,7 @@ export const ResourceWindow = ({
   children,
   embeddedHeader = false,
   headerActions,
+  dragIcon,
 }: {
   title: string;
   bounds: ResourceWindowBounds;
@@ -40,9 +41,10 @@ export const ResourceWindow = ({
   onCommit: (bounds: ResourceWindowBounds) => void;
   onClose: () => void;
   onReload?: () => void;
-  children: ReactNode;
+  children: ReactNode | ((dragHandle: ReactNode) => ReactNode);
   embeddedHeader?: boolean;
   headerActions?: ReactNode;
+  dragIcon?: ReactNode;
 }) => {
   const section = useRef<HTMLElement>(null);
   const minimum =
@@ -269,7 +271,7 @@ export const ResourceWindow = ({
       onLostPointerCapture={cancel}
       onKeyDown={(event) => key(event, "move")}
     >
-      {title}
+      {dragIcon ?? title}
     </div>
   );
   return (
@@ -302,9 +304,11 @@ export const ResourceWindow = ({
           {headerActions}
         </div>
       ) : (
-        dragHandle
+        typeof children !== "function" && dragHandle
       )}
-      <div className="fc-resource-window-content">{children}</div>
+      <div className="fc-resource-window-content">
+        {typeof children === "function" ? children(dragHandle) : children}
+      </div>
       {!embeddedHeader && onReload && (
         <footer>
           <button type="button" disabled aria-label={t("fcboard.previous")}>

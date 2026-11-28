@@ -265,6 +265,15 @@ export const registerCanvasCommands = (
         if (signal !== undefined && !(signal instanceof AbortSignal)) {
           throw new Error(t("fcboard.invalid_style_parameters"));
         }
+        if (
+          classroomCommands.has("document.configure") &&
+          !Object.keys(input).some((key) => key.startsWith("toolbar"))
+        ) {
+          return classroomCommands.execute({
+            name: "document.configure",
+            args: { ...input, signal },
+          });
+        }
         const request = new AbortController();
         const cancel = () => request.abort();
         signal?.addEventListener("abort", cancel, { once: true });
@@ -801,7 +810,11 @@ export const registerCanvasCommands = (
           args.signal.throwIfAborted();
         }
         const resource = validateInteractiveResource(args.resource);
-        if (classroomCommands.has("document.resource")) {
+        if (
+          !resource.document &&
+          !resource.media &&
+          classroomCommands.has("document.resource")
+        ) {
           return classroomCommands.execute({
             name: "document.resource",
             args: { ...args, resource },
@@ -828,7 +841,8 @@ export const registerCanvasCommands = (
             customData: {
               fcInteractiveResource: resource,
               ...(resource.id !== calculatorResourceId &&
-                !resource.media && {
+                !resource.media &&
+                !resource.document && {
                   generationData: { status: "done", html: resource.html },
                 }),
             },

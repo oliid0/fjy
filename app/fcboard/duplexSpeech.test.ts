@@ -116,6 +116,43 @@ it("uses native microphone/socket/speaker without any WebView capture or playbac
   }
 });
 
+it("uses an unchanged native microphone session when its current document frame changes", async () => {
+  mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
+  let stamp = "document-a:1";
+  const visualFrame = vi.fn(async (previous?: string) =>
+    previous === stamp
+      ? undefined
+      : { stamp, image: "data:image/jpeg;base64,/9j/" },
+  );
+  const handle = await startDuplexSpeech({ ...callbacks(), visualFrame });
+  const images = () =>
+    mocks.engine.send.mock.calls.filter(
+      ([message]) => message.event.type === "input_image_buffer.append",
+    );
+  try {
+    expect(mocks.engine.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capture: true,
+        configuration: expect.objectContaining({
+          session: expect.objectContaining({ model: "1.3.0.0" }),
+          extension: expect.objectContaining({
+            video: { frame_format: "JPEG", frame_rate: 2 },
+          }),
+        }),
+      }),
+    );
+    expect(images()).toHaveLength(1);
+    expect(images()[0][0].event.image).toBe("/9j/");
+    stamp = "document-b:1";
+    await vi.waitFor(() => expect(images()).toHaveLength(2), { timeout: 1400 });
+    expect(visualFrame).toHaveBeenCalledWith("document-a:1");
+    expect(mocks.engine.start).toHaveBeenCalledTimes(1);
+    expect(mocks.engine.stop).not.toHaveBeenCalled();
+  } finally {
+    await handle.cancel();
+  }
+});
+
 it("recovers native-only input and tool-result sending without a WebView capture handle", async () => {
   mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
   const view = callbacks();

@@ -121,7 +121,7 @@ const nativeColor = (value: string) => {
 };
 
 const boardControls =
-  'button,input,textarea,select,[aria-modal="true"],[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.fc-editor-properties,.fc-properties-popover,.fc-factory-color-wheel,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,.fc-split-board,.fc-factory-gizmos [data-gizmo],iframe,[data-native-resource-object-id]';
+  'button,input,textarea,select,[aria-modal="true"],[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.fc-editor-properties,.fc-properties-popover,.fc-factory-color-wheel,.fc-combined-toolbox,.fc-resource-window,.fc-document-window-view:fullscreen,.fc-spotlight,.fc-curtain,.fc-split-board,.fc-factory-gizmos [data-gizmo],iframe,[data-native-resource-object-id]';
 
 const surfaceStamp = (api: FcboardImperativeAPI) => {
   const state = api.getAppState();
@@ -129,7 +129,6 @@ const surfaceStamp = (api: FcboardImperativeAPI) => {
     classroomCommands.revision,
     (classroomCommands.read("boards") as { active?: string } | undefined)
       ?.active,
-    classroomCommands.has("document.draw"),
     state.scrollX,
     state.scrollY,
     state.zoom.value,
@@ -503,8 +502,7 @@ export const NativeInkInteraction = ({
             nativeStyle(thickStyle))) &&
         !state.viewModeEnabled &&
         !state.editingTextElement &&
-        !document.querySelector(".fc-split-board") &&
-        !classroomCommands.has("document.draw");
+        !document.querySelector(".fc-split-board");
       const overlayPreview = !!api.getSceneProjection?.();
       configuredSurface = surfaceStamp(api);
       configuredTool = state.activeTool.type;

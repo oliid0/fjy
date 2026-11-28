@@ -104,6 +104,7 @@ export const canvasConfigurationPatch = (
   api: FcboardImperativeAPI,
   input: Record<string, unknown>,
   device?: UIOptions["inkProfile"],
+  state = api.getAppState(),
 ): Partial<AppState> => {
   const keys = Object.keys(input);
   if (
@@ -123,7 +124,6 @@ export const canvasConfigurationPatch = (
   ) {
     throw invalid();
   }
-  const state = api.getAppState();
   const patch: Partial<AppState> = {};
   for (const [key, [min, max, field]] of Object.entries(numeric)) {
     if (key in input) {

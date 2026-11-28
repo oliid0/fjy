@@ -31,6 +31,7 @@ public class BoardFilePlugin extends Plugin {
     private List<FactoryPageExport.Page> exportPages=Collections.emptyList();
     private FactoryPageExport.Prepared pageExport;
     private static final long MAX_SIZE=FactoryPageExport.MAX_BYTES;
+    private static final long MAX_DOCUMENT_SIZE=512L * 1024 * 1024;
     private void require(PluginCall call) throws IOException {
         if(staged==null || !Objects.equals(id,call.getString("id")))throw new IOException("Board file session expired");
     }
@@ -43,9 +44,13 @@ public class BoardFilePlugin extends Plugin {
     @PluginMethod public void begin(PluginCall call){worker.execute(()->{
         try{
             if(saving || staged!=null)throw new IOException("A board file is being saved");
-            long size=call.getData().optLong("size",0L);if(size<1 || size>MAX_SIZE)throw new IOException("Invalid board file size");
-            clear();kind=FactoryPageExport.Kind.read(call.getString("kind","bzd"));
-            if(kind!=FactoryPageExport.Kind.BOARD)exportPages=FactoryPageExport.manifest(call.getArray("pages"),size);
+            FactoryPageExport.Kind format=FactoryPageExport.Kind.read(call.getString("kind","bzd"));
+            long size=call.getData().optLong("size",0L);
+            long maximum=format==FactoryPageExport.Kind.BOARD || format.rasterPages() ? MAX_SIZE : MAX_DOCUMENT_SIZE;
+            if(size<1 || size>maximum)throw new IOException("Selected export exceeds the supported file size");
+            if(size>getContext().getCacheDir().getUsableSpace())throw new IOException("Insufficient storage for the exported file");
+            clear();kind=format;
+            if(kind.rasterPages())exportPages=FactoryPageExport.manifest(call.getArray("pages"),size);
             id=UUID.randomUUID().toString();expected=size;staged=File.createTempFile("board-",".tmp",getContext().getCacheDir());
             call.resolve(new JSObject().put("id",id));
         }catch(Exception error){call.reject(error.getMessage(),error);}
@@ -79,7 +84,18 @@ public class BoardFilePlugin extends Plugin {
             require(call);if(saving || received!=expected)throw new IOException("Board upload incomplete");
             complete=true;saving=true;
             if(kind==FactoryPageExport.Kind.BOARD){if(!"bzd".equals(readXml(staged).getDocumentElement().getTagName()))throw new IOException("Invalid BZD XML");}
-            else pageExport=FactoryPageExport.prepare(staged,getContext().getCacheDir(),kind,exportPages,call.getString("name","Fcboard"));
+            else if(kind.rasterPages())pageExport=FactoryPageExport.prepare(staged,getContext().getCacheDir(),kind,exportPages,call.getString("name","Fcboard"));
+            else if(kind==FactoryPageExport.Kind.WORD || kind==FactoryPageExport.Kind.SHEET) {
+                try(java.util.zip.ZipFile office=new java.util.zip.ZipFile(staged)) {
+                    String required=kind==FactoryPageExport.Kind.WORD ? "word/document.xml" : "xl/workbook.xml";
+                    if(office.getEntry("[Content_Types].xml")==null || office.getEntry(required)==null)
+                        throw new IOException("Invalid Office document");
+                }
+            }
+            else try(RandomAccessFile pdf=new RandomAccessFile(staged,"r")) {
+                byte[] header=new byte[5];pdf.readFully(header);
+                if(!"%PDF-".equals(new String(header,StandardCharsets.US_ASCII))) throw new IOException("Invalid PDF");
+            }
             getActivity().runOnUiThread(()->{
                 try{
                     String owner=call.getString("id","");if(canceled.remove(owner)){worker.execute(()->{saving=false;clear();call.resolve(new JSObject().put("saved",false));});return;}
@@ -102,7 +118,7 @@ public class BoardFilePlugin extends Plugin {
                 boolean multiple=kind==FactoryPageExport.Kind.IMAGE && exportPages.size()>1;
                 if(!multiple)written.add(selected);
                 if(canceled.contains(owner))throw new IOException("Save canceled");
-                List<File> files=kind==FactoryPageExport.Kind.BOARD?Collections.singletonList(staged):pageExport.files;
+                List<File> files=kind.rasterPages()?pageExport.files:Collections.singletonList(staged);
                 Uri directory=multiple?DocumentsContract.buildDocumentUriUsingTree(selected,DocumentsContract.getTreeDocumentId(selected)):null;
                 for(int i=0;i<files.size();i++){
                     Uri target=multiple?DocumentsContract.createDocument(getContext().getContentResolver(),directory,"image/jpeg",call.getString("name","Fcboard")+"_"+String.format(Locale.ROOT,"%02d",exportPages.get(i).number)+".jpg"):selected;

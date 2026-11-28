@@ -3,7 +3,13 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
-import { installVoice, say, startVoice, voiceEndpoint } from "./voice";
+import {
+  installVoice,
+  say,
+  startVoice,
+  toolOutput,
+  voiceEndpoint,
+} from "./voice";
 
 import type { Page } from "@playwright/test";
 
@@ -174,9 +180,7 @@ test("AI style commands update selected text and the next insertion through orig
             {
               message: {
                 content: JSON.stringify(
-                  String(request.messages.at(-1).content).startsWith(
-                    "The following is tool output",
-                  )
+                  toolOutput(request.messages)
                     ? { action: "done" }
                     : {
                         action: "commands",
@@ -198,9 +202,9 @@ test("AI style commands update selected text and the next insertion through orig
       });
       return;
     }
-    const last = String(request.messages.at(-1).content);
-    if (last.startsWith("The following is tool output")) {
-      const { results, state } = JSON.parse(last.slice(last.indexOf("\n") + 1));
+    const output = toolOutput(request.messages);
+    if (output) {
+      const { results, state } = output;
       expect(results.map((result: { ok: boolean }) => result.ok)).toEqual([
         true,
         true,

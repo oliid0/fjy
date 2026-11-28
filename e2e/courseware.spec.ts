@@ -22,6 +22,11 @@ const openFile = async (page: Page, name: string) => {
   await expect(page.getByRole("button", { name: "关闭课件" })).toBeEnabled({
     timeout: 30000,
   });
+  await expect(page.locator(".fc-document-window-view")).toHaveAttribute(
+    "aria-busy",
+    "false",
+    { timeout: 30000 },
+  );
   await expect(page.locator(".fc-document-status[role=alert]")).toHaveCount(0);
 };
 
@@ -129,7 +134,10 @@ test("transparent PPT ink survives closing, can be erased, and undo restores it"
   )!;
   await layer.evaluate(
     (surface, at) => {
-      surface.setPointerCapture = () => {};
+      const captures = new Set<number>();
+      surface.setPointerCapture = (id) => captures.add(id);
+      surface.hasPointerCapture = (id) => captures.has(id);
+      surface.releasePointerCapture = (id) => captures.delete(id);
       const pointer = {
         bubbles: true,
         pointerId: 2,
@@ -429,6 +437,10 @@ test("voice draws into the visible PPT and internal pinch updates its borderless
   await page.goto("/");
   await openFile(page, "testPPT.pptx");
   await startVoice(page);
+  await expect(page.locator(".fc-voice-orb")).toHaveAttribute(
+    "data-state",
+    "listening",
+  );
   await expect(
     page.getByRole("toolbar", { name: "选区操作", exact: true }),
   ).toBeVisible();

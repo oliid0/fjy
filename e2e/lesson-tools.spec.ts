@@ -2,7 +2,14 @@ import { expect, test } from "@playwright/test";
 
 import { inertiaResource } from "../app/fcboard/test/interactiveResource";
 
-import { installVoice, say, startVoice, voiceEndpoint } from "./voice";
+import {
+  installVoice,
+  messageText,
+  say,
+  startVoice,
+  toolOutput,
+  voiceEndpoint,
+} from "./voice";
 
 import type { ResourceControlState } from "../packages/fcboard/interactiveResourceControls";
 
@@ -21,7 +28,7 @@ for (const width of [1440, 3080, 390]) {
     await page.route(voiceEndpoint, async (route) => {
       const request = route.request().postDataJSON();
       const system = String(request.messages[0].content);
-      const last = String(request.messages.at(-1).content);
+      const last = messageText(request.messages.at(-1).content);
       let result: unknown;
       if (
         system.includes(
@@ -143,7 +150,7 @@ for (const width of [1440, 3080, 390]) {
             ],
           };
         } else {
-          const data = JSON.parse(last.slice(last.indexOf("\n") + 1));
+          const data = toolOutput(request.messages);
           expect(data.results.every((item: { ok: boolean }) => item.ok)).toBe(
             true,
           );

@@ -23,6 +23,8 @@ export default defineConfig(({ mode, command }) => {
   // https://vitejs.dev/config/
   return {
     define: {
+      // The installed browser DOC/RTF converter checks global.Blob on export.
+      global: "globalThis",
       "import.meta.env.VITE_NATIVE_INFERENCE": JSON.stringify(
         nativeInference ? "true" : "false",
       ),

@@ -636,6 +636,94 @@ describe("selection-driven classroom controls", () => {
   );
 
   it.each(["local", "cloud", "system"] as const)(
+    "starts and pauses %s voice from the toolbox while a document operation still owns the UI lock",
+    async (provider) => {
+      saveSettings({ ...defaults, speech: provider }, false);
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const stop = vi.fn();
+      const capture = (
+        provider === "cloud"
+          ? vi.spyOn(cloudSpeech, "startCloudSpeech")
+          : vi.spyOn(localSpeech, "startLocalSpeech")
+      ).mockResolvedValue({
+        stop: vi.fn().mockResolvedValue(undefined),
+        cancel,
+      });
+      const system = vi
+        .spyOn(speech, "startSystemSpeech")
+        .mockResolvedValue(stop);
+      const view = render(<Classroom api={api} />);
+      let finish!: () => void;
+      const opening = vi.fn(
+        () => new Promise<void>((resolve) => (finish = resolve)),
+      );
+      const ordinary = vi.fn();
+      const release = classroomCommands.register(
+        "test.opening",
+        "@internal",
+        opening,
+      );
+      const releaseOrdinary = classroomCommands.register(
+        "test.ordinary",
+        "@internal",
+        ordinary,
+      );
+      let pending!: Promise<unknown>;
+      try {
+        act(() => {
+          pending = classroomCommands.execute({
+            name: "ui.invoke",
+            args: { command: "test.opening", origin: "tools" },
+          });
+        });
+        expect(opening).toHaveBeenCalledTimes(1);
+        await act(async () => {
+          await classroomCommands.execute({
+            name: "ui.invoke",
+            args: { command: "voice.toggle", origin: "tools" },
+          });
+        });
+        expect(provider === "system" ? system : capture).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(classroomCommands.read("classroom")).toMatchObject({
+          listening: true,
+        });
+        await act(async () => {
+          await classroomCommands.execute({
+            name: "ui.invoke",
+            args: { command: "test.ordinary", origin: "tools" },
+          });
+          await classroomCommands.execute({
+            name: "ui.invoke",
+            args: { command: "voice.toggle", origin: "tools" },
+          });
+        });
+        expect(ordinary).not.toHaveBeenCalled();
+        expect(provider === "system" ? stop : cancel).toHaveBeenCalledTimes(1);
+        expect(classroomCommands.read("classroom")).toMatchObject({
+          listening: false,
+        });
+        await act(async () => {
+          finish();
+          await pending;
+          await classroomCommands.execute({
+            name: "ui.invoke",
+            args: { command: "test.ordinary", origin: "tools" },
+          });
+        });
+        expect(ordinary).toHaveBeenCalledTimes(1);
+      } finally {
+        finish?.();
+        await pending;
+        release();
+        releaseOrdinary();
+        view.unmount();
+      }
+    },
+  );
+
+  it.each(["local", "cloud", "system"] as const)(
     "keeps %s voice listening across consecutive turns until explicitly stopped",
     async (provider) => {
       saveSettings({ ...defaults, speech: provider }, false);

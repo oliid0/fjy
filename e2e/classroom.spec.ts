@@ -422,7 +422,7 @@ test("typed equations calculate only after tapping the selection action", async 
   await page.screenshot({ path: testInfo.outputPath("automatic-answer.png") });
 });
 
-test("selected handwriting sends its PNG only after tapping calculate", async ({
+test("selected handwriting sends selection and board PNGs only after asking AI", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -459,7 +459,7 @@ test("selected handwriting sends its PNG only after tapping calculate", async ({
         json: {
           choices: [
             {
-              message: { content: "8*8" },
+              message: { content: "64" },
             },
           ],
         },

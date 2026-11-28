@@ -17,7 +17,7 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class DebugSettingsTest {
-    @Test public void opensDeveloperWirelessEntryOrSystemDashboardAccordingToActualSystemState() throws Exception {
+    @Test public void opensDeveloperWirelessEntryOrSettingsSearchAccordingToActualSystemState() throws Exception {
         Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
         android.content.ContentResolver resolver = instrumentation.getTargetContext().getContentResolver();
         int original = Settings.Global.getInt(resolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0);
@@ -48,7 +48,7 @@ public class DebugSettingsTest {
             instrumentation.getUiAutomation().dropShellPermissionIdentity();
         }
     }
-    @Test public void unavailableDeveloperPageFallsBackToSystemDashboard() throws Exception {
+    @Test public void unavailableDeveloperPageFallsBackToSettingsSearch() throws Exception {
         Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
         android.content.ContentResolver resolver=instrumentation.getTargetContext().getContentResolver();
         int original=Settings.Global.getInt(resolver,Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,0);
@@ -56,11 +56,14 @@ public class DebugSettingsTest {
         java.util.List<String> actions=new java.util.ArrayList<>();
         Instrumentation.ActivityMonitor monitor=new Instrumentation.ActivityMonitor(){
             @Override public Instrumentation.ActivityResult onStartActivity(android.content.Intent intent){
-                if(!"com.android.settings".equals(intent.getPackage()))return null;
+                android.content.ComponentName component = intent.getComponent();
+                if(component == null || !("com.android.settings".equals(component.getPackageName()) ||
+                    "com.android.settings.intelligence".equals(component.getPackageName()))) return null;
                 actions.add(intent.getAction());
                 if(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS.equals(intent.getAction()))throw new android.content.ActivityNotFoundException("Developer page hidden by firmware");
                 assertEquals(android.content.Intent.ACTION_MAIN,intent.getAction());
-                assertEquals("com.android.settings.Settings$SystemDashboardActivity", intent.getComponent().getClassName());
+                assertEquals("com.android.settings.intelligence", component.getPackageName());
+                assertEquals("com.android.settings.intelligence.search.SearchActivity", component.getClassName());
                 return new Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED,null);
             }
         };

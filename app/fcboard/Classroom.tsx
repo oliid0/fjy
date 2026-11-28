@@ -817,23 +817,30 @@ export const Classroom = ({
     setPanel(null);
     returnFocus.current?.focus();
   };
-  const run = useCallback(async (operation: () => Promise<unknown>) => {
-    if (actionBusy.current) {
-      return;
-    }
-    actionBusy.current = true;
-    setBusy(true);
-    setError("");
-    setStatus("");
-    try {
-      await operation();
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      actionBusy.current = false;
-      setBusy(false);
-    }
-  }, []);
+  const run = useCallback(
+    async (operation: () => Promise<unknown>, independent = false) => {
+      if (!independent) {
+        if (actionBusy.current) {
+          return;
+        }
+        actionBusy.current = true;
+        setBusy(true);
+      }
+      setError("");
+      setStatus("");
+      try {
+        await operation();
+      } catch (failure) {
+        setError(errorMessage(failure));
+      } finally {
+        if (!independent) {
+          actionBusy.current = false;
+          setBusy(false);
+        }
+      }
+    },
+    [],
+  );
 
   const solveMath = useCallback(
     async (
@@ -2903,7 +2910,7 @@ Tools and controls depend on the current interface; open the relevant surface be
             name: args.command,
             args: args.args as Record<string, unknown> | undefined,
           });
-        });
+        }, args.command === "voice.toggle");
       }),
       classroomCommands.register(
         "voice.speak",

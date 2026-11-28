@@ -3615,6 +3615,7 @@ export const FilePreview = ({
       ref={dialog}
       tabIndex={-1}
       className="fc-document-window-view"
+      aria-busy={loading}
       data-document-dark={documentDark || undefined}
       onWheel={(event) => event.stopPropagation()}
       aria-label={t("fcboard.preview_name", { name: file.name })}

@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import { interactiveResource } from "../app/fcboard/test/interactiveResource";
 
 import { selectMenu } from "./menu";
+import { toolOutput } from "./voice";
 
 import type { ResourceControlState } from "../packages/fcboard/interactiveResourceControls";
 
@@ -40,9 +41,7 @@ for (const viewport of [
             "You are a continuously conversational whiteboard assistant",
           )
         ) {
-          result = String(request.messages.at(-1).content).startsWith(
-            "The following is tool output",
-          )
+          result = toolOutput(request.messages)
             ? { action: "done" }
             : {
                 action: "commands",
@@ -67,10 +66,7 @@ for (const viewport of [
               commands: [{ name: "canvas.inspect" }],
             };
           } else {
-            const content = String(request.messages.at(-1).content);
-            const { results } = JSON.parse(
-              content.slice(content.indexOf("\n") + 1),
-            );
+            const { results } = toolOutput(request.messages);
             expect(results[0].ok).toBe(true);
             if (agentCalls === 2) {
               objectId = results[0].result.elements.find(
